@@ -16,7 +16,9 @@ export function usePlayer() {
   const duration = ref(0)
   const isReady = ref(false)
   const isEnded = ref(false)
+  const isLoading = ref(false)
   const hasMedia = ref(false)
+  const loadedPath = ref('')
   const error = ref<string | null>(null)
 
   const song = ref<SongInfo>({
@@ -27,7 +29,6 @@ export function usePlayer() {
 
   let disposed = false
   let currentPath = ''
-  let isLoading = false
   let loadVersion = 0
 
   function setError(err: unknown) {
@@ -76,7 +77,7 @@ export function usePlayer() {
 
     switch (event.name) {
       case 'time-pos':
-        if (isEnded.value || isLoading) return
+        if (isEnded.value || isLoading.value) return
 
         if (typeof event.data === 'number') {
           currentTime.value = event.data
@@ -84,7 +85,7 @@ export function usePlayer() {
         break
 
       case 'duration':
-        if (isEnded.value || isLoading) return
+        if (isEnded.value || isLoading.value) return
 
         if (typeof event.data === 'number') {
           duration.value = event.data
@@ -121,8 +122,9 @@ export function usePlayer() {
 
     if (event.name === 'file-loaded') {
       hasMedia.value = true
+      loadedPath.value = currentPath
       isEnded.value = false
-      isLoading = false
+      isLoading.value = false
 
       const version = loadVersion
 
@@ -144,7 +146,7 @@ export function usePlayer() {
     if (event.name === 'end-file') {
       // 切换文件时，mpv 会结束旧文件
       // 只有自然播放到末尾才标记为播放完成
-      if (event.reason === 'eof' && !isLoading) {
+      if (event.reason === 'eof' && !isLoading.value) {
         isEnded.value = true
         isPlaying.value = false
         hasMedia.value = false
@@ -152,7 +154,7 @@ export function usePlayer() {
 
         // 通知外部：当前歌曲自然播放完成
         onEndedCallback?.()
-      } else if (!isLoading) {
+      } else if (!isLoading.value) {
         hasMedia.value = false
         isPlaying.value = false
       }
@@ -188,12 +190,13 @@ export function usePlayer() {
    * 加载并播放指定音乐
    */
   async function loadSong(path: string) {
-    if (!isReady.value || disposed || isLoading) return
+    if (!isReady.value || disposed || isLoading.value) return
 
     const version = ++loadVersion
 
     currentPath = path
-    isLoading = true
+    isLoading.value = true
+    loadedPath.value = ''
 
     isPlaying.value = false
     isEnded.value = false
@@ -218,7 +221,7 @@ export function usePlayer() {
     } catch (err) {
       if (version !== loadVersion) return
 
-      isLoading = false
+      isLoading.value = false
       setError(err)
     }
   }
@@ -227,7 +230,7 @@ export function usePlayer() {
    * 开始或恢复播放
    */
   async function play() {
-    if (!isReady.value || disposed || isLoading) return
+    if (!isReady.value || disposed || isLoading.value) return
 
     try {
       if (isEnded.value) {
@@ -247,7 +250,7 @@ export function usePlayer() {
    * 暂停播放
    */
   async function pause() {
-    if (!isReady.value || disposed || isLoading || isEnded.value) {
+    if (!isReady.value || disposed || isLoading.value || isEnded.value) {
       return
     }
 
@@ -262,7 +265,7 @@ export function usePlayer() {
    * 切换播放 / 暂停
    */
   async function togglePlay() {
-    if (!isReady.value || disposed || isLoading) return
+    if (!isReady.value || disposed || isLoading.value) return
 
     if (isEnded.value) {
       await play()
@@ -293,7 +296,7 @@ export function usePlayer() {
     if (
       !isReady.value ||
       disposed ||
-      isLoading ||
+      isLoading.value ||
       isEnded.value ||
       duration.value <= 0
     ) {
@@ -316,8 +319,10 @@ export function usePlayer() {
 
     disposed = true
     isReady.value = false
+    isLoading.value = false
     isPlaying.value = false
     hasMedia.value = false
+    loadedPath.value = ''
     onEndedCallback = null
 
     unsubscribeProperty()
@@ -335,7 +340,9 @@ export function usePlayer() {
     duration,
     isReady,
     isEnded,
+    isLoading,
     hasMedia,
+    loadedPath,
     error,
     init,
     loadSong,

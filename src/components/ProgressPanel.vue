@@ -7,11 +7,16 @@ const props = defineProps<{
   currentTime: number
   duration: number
   terminalWidth: number
+  horizontalPadding: number
+  compact: boolean
 }>()
 
-// 减去 App.vue 左右各 1 列的 padding
+// 扣除 App.vue 的水平内边距，避免窄终端下进度条越界。
 const progressWidth = computed(() => {
-  return Math.max(1, props.terminalWidth - 2)
+  return Math.max(
+    1,
+    props.terminalWidth - props.horizontalPadding * 2,
+  )
 })
 </script>
 
@@ -20,7 +25,7 @@ const progressWidth = computed(() => {
     width="100%"
     flexDirection="column"
     :flexShrink="0"
-    :gap="1"
+    :gap="compact ? 0 : 1"
   >
     <Box
       width="100%"

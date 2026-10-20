@@ -107,7 +107,8 @@ const activeLineContent = computed(() => {
           wrapMode="none" />
 
         <!-- 其他歌词行 -->
-        <Text v-else :fg="line.active ? '#edc878' : '#62727d'" :bold="line.active">{{ line.text || ' ' }}</Text>
+        <Text v-else width="100%" textAlign="center" wrapMode="none" truncate
+          :fg="line.active ? '#edc878' : '#62727d'" :bold="line.active">{{ line.text || ' ' }}</Text>
       </template>
     </template>
   </Box>

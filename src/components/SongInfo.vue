@@ -17,9 +17,10 @@ defineProps<{
     alignItems="center"
     :flexShrink="0"
     :paddingY="1"
+    overflow="hidden"
   >
-    <Text bold>{{ song.title }}</Text>
-    <Text fg="#9aabb8">
+    <Text width="100%" bold textAlign="center" wrapMode="none" truncate>{{ song.title }}</Text>
+    <Text width="100%" fg="#9aabb8" textAlign="center" wrapMode="none" truncate>
       {{ song.artist }} · {{ song.album }}
     </Text>
   </Box>
