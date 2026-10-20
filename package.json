@@ -1,0 +1,38 @@
+{
+  "name": "tui-music",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "dev": "cross-env NODE_OPTIONS=\"--experimental-ffi --disable-warning=ExperimentalWarning\" vite",
+    "build": "vite build",
+    "start": "node --experimental-ffi --disable-warning=ExperimentalWarning dist/main.js",
+    "test": "node scripts/test-mpv.ts",
+    "typecheck": "vue-tsc --noEmit"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "devEngines": {
+    "packageManager": {
+      "name": "pnpm",
+      "version": "^11.13.1",
+      "onFail": "download"
+    }
+  },
+  "type": "module",
+  "dependencies": {
+    "@opentui/core": "^0.6.6",
+    "string-width": "7.2.0",
+    "vue": "^3.5.44",
+    "vue-termui": "^0.3.0"
+  },
+  "devDependencies": {
+    "@types/node": "26.1.1",
+    "@vitejs/plugin-vue": "^6.0.10",
+    "cross-env": "^10.1.0",
+    "typescript": "5.9.3",
+    "vite": "^8.3.4",
+    "vue-tsc": "3.3.7"
+  }
+}
