@@ -100,13 +100,14 @@ function rowText(song: MusicFile, index: number) {
       width="100%"
       :fg="isFocused ? theme.primary : theme.secondary"
       :bold="isFocused"
+      textAlign="center"
       wrapMode="none"
       :truncate="true"
     >
       播放列表
     </Text>
 
-    <Text :fg="theme.divider" wrapMode="none">────────</Text>
+    <Text width="100%" :fg="theme.divider" textAlign="center" wrapMode="none">────────</Text>
 
     <Text v-if="songs.length === 0" :fg="theme.muted">
       暂无本地歌曲

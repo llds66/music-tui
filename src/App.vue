@@ -12,6 +12,7 @@ import { resolve } from 'node:path'
 import { Box, onKeyDown, useExit } from 'vue-termui'
 
 import LyricsPanel from './components/LyricsPanel.vue'
+import MusicBanner from './components/MusicBanner.vue'
 import MusicListPanel from './components/MusicListPanel.vue'
 import PlayerToolbar from './components/PlayerToolbar.vue'
 import ProgressPanel from './components/ProgressPanel.vue'
@@ -96,6 +97,10 @@ const showMusicList = computed(() =>
 )
 const listWidth = computed(() =>
   Math.min(44, Math.max(28, Math.floor(terminalWidth.value * 0.36))),
+)
+const bannerHeight = ref(1)
+const listAvailableHeight = computed(() =>
+  Math.max(1, contentHeight.value - bannerHeight.value - 2),
 )
 const playingIndex = computed(() =>
   songs.value.findIndex((item) => item.path === loadedPath.value),
@@ -322,16 +327,18 @@ onUnmounted(unsubscribeKeyboard)
         height="100%"
         flexDirection="column"
         :flexShrink="0"
-        :gap="1"
+        :gap="2"
         overflow="hidden"
       >
+        <MusicBanner :width="listWidth" :available-height="contentHeight"
+          @height-change="bannerHeight = $event" />
         <MusicListPanel
           :songs="songs"
           :current-index="playingIndex"
           :selected-index="selectedIndex"
           :is-focused="focusArea === 'list'"
           :width="listWidth"
-          :available-height="contentHeight"
+          :available-height="listAvailableHeight"
           :metadata-by-path="metadataByPath"
         />
       </Box>

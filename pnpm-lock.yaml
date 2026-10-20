@@ -200,6 +200,9 @@ importers:
       '@opentui/core':
         specifier: ^0.6.6
         version: 0.6.6(typescript@5.9.3)(web-tree-sitter@0.25.10)
+      ascii.rest:
+        specifier: 0.4.0
+        version: 0.4.0
       string-width:
         specifier: 7.2.0
         version: 7.2.0
@@ -512,6 +515,15 @@ packages:
   ansi-regex@6.4.0:
     resolution: {integrity: sha512-KzTVk2tCWAHtYrvvvaP8bJKJq2pVinhLcGEQdtLIYPbmNGNyYe8QwNaTUYQp2J7/vIsUKt5QCqAfUkYyG9DkOw==}
     engines: {node: '>=12'}
+
+  ascii.rest@0.4.0:
+    resolution: {integrity: sha512-lqKcesbm3Ij5ENvgs/CTRWF3HrjAogOoMJdqOh8rlRmdzG3uRSyqS/3chfnjJfcIeqj69MWI8+NstMZ/Br9Ivw==}
+    hasBin: true
+    peerDependencies:
+      react: '>=18'
+    peerDependenciesMeta:
+      react:
+        optional: true
 
   bun-ffi-structs@0.3.1:
     resolution: {integrity: sha512-3gM7PpVWLyrwxWjcilSiGuhWanhZivvo6l0u573NziPH6f/gwk6McbaYgn7oJWov6pKGRTDbrg94W5DcJsKTtQ==}
@@ -1050,6 +1062,8 @@ snapshots:
   alien-signals@3.2.1: {}
 
   ansi-regex@6.4.0: {}
+
+  ascii.rest@0.4.0: {}
 
   bun-ffi-structs@0.3.1(typescript@5.9.3):
     dependencies:

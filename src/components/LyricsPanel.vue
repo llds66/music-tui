@@ -19,9 +19,14 @@ const props = defineProps<{
   availableHeight: number
 }>()
 
-// 标题和分隔线各占一行；歌词之间保留一行间距。
+// 高度充足时在歌曲信息和歌词之间留两行，小窗口自动收紧。
+const lyricTopGap = computed(() =>
+  props.availableHeight >= 10 ? 2 : props.availableHeight >= 6 ? 1 : 0,
+)
+
+// 歌曲名、歌手和分隔线各占一行；歌词之间保留一行间距。
 const visibleLineCount = computed(() =>
-  Math.max(1, Math.floor((props.availableHeight - 1) / 2)),
+  Math.max(1, Math.floor((props.availableHeight - 2 - lyricTopGap.value) / 2)),
 )
 
 // 以当前歌词为中心截取可见歌词
@@ -101,12 +106,16 @@ const activeLineContent = computed(() => {
 <template>
   <Box width="100%" flexDirection="column" :flexGrow="1" :flexShrink="1" :minHeight="3"
     overflow="hidden" :gap="0">
-    <Text width="100%" :fg="theme.secondary" wrapMode="none" :truncate="true">
-      {{ song.title }}（{{ song.artist }} · {{ song.album }}）
+    <Text width="100%" :fg="theme.secondary" textAlign="center" wrapMode="none" :truncate="true">
+      {{ song.title }}
     </Text>
-    <Text width="100%" :fg="theme.divider" wrapMode="none" :truncate="true">────────</Text>
+    <Text width="100%" :fg="theme.muted" textAlign="center" wrapMode="none" :truncate="true">
+      {{ song.artist }}
+    </Text>
+    <Text width="100%" :fg="theme.divider" textAlign="center" wrapMode="none" :truncate="true">────────</Text>
+    <Box v-if="lyricTopGap" width="100%" :height="lyricTopGap" :flexShrink="0" />
 
-    <!-- 标题紧随歌曲信息；只在剩余空间内稳定居中歌词窗口。 -->
+    <!-- 在剩余空间内稳定居中歌词窗口。 -->
     <Box width="100%" :maxWidth="72" flexDirection="column" :flexGrow="1" :flexShrink="1"
       alignSelf="center" alignItems="center" justifyContent="center" :gap="1" overflow="hidden">
       <Text v-if="statusText" :fg="theme.muted">
