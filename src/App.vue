@@ -13,10 +13,8 @@ import { Box, onKeyDown, useExit } from 'vue-termui'
 
 import LyricsPanel from './components/LyricsPanel.vue'
 import MusicListPanel from './components/MusicListPanel.vue'
-import PlayerHeader from './components/PlayerHeader.vue'
 import PlayerToolbar from './components/PlayerToolbar.vue'
 import ProgressPanel from './components/ProgressPanel.vue'
-import SongInfo from './components/SongInfo.vue'
 
 import { useLyrics } from './composables/useLyrics'
 import {
@@ -25,6 +23,7 @@ import {
 } from './composables/useMusicLibrary'
 import { usePlayer } from './composables/usePlayer'
 import { useTerminalSize } from './composables/useTerminalSize'
+import { theme } from './theme'
 
 const { terminalHeight, terminalWidth } = useTerminalSize()
 
@@ -78,14 +77,12 @@ const outerPadding = computed(() =>
   terminalHeight.value >= 12 && terminalWidth.value >= 40 ? 1 : 0,
 )
 const rootGap = computed(() => terminalHeight.value >= 16 ? 1 : 0)
-const showHeader = computed(() => terminalHeight.value >= 9)
 const progressHeight = computed(() => terminalHeight.value >= 16 ? 3 : 2)
 const toolbarHeight = computed(() => terminalHeight.value >= 20 ? 3 : 2)
 const contentHeight = computed(() => {
-  const childCount = showHeader.value ? 4 : 3
+  const childCount = 3
   const fixedHeight =
     outerPadding.value * 2 +
-    (showHeader.value ? 1 : 0) +
     progressHeight.value +
     toolbarHeight.value +
     rootGap.value * (childCount - 1)
@@ -316,26 +313,32 @@ onUnmounted(unsubscribeKeyboard)
 </script>
 
 <template>
-  <Box width="100%" height="100%" flexDirection="column" :padding="outerPadding" :gap="rootGap" overflow="hidden">
-    <PlayerHeader v-if="showHeader" />
-
+  <Box width="100%" height="100%" flexDirection="column" :padding="outerPadding" :gap="rootGap"
+    :backgroundColor="theme.background" overflow="hidden">
     <Box width="100%" :height="contentHeight" flexDirection="row" :gap="showMusicList ? 1 : 0" overflow="hidden">
-      <MusicListPanel
+      <Box
         v-if="showMusicList"
-        :songs="songs"
-        :current-index="playingIndex"
-        :selected-index="selectedIndex"
-        :is-focused="focusArea === 'list'"
         :width="listWidth"
-        :available-height="contentHeight"
-        :metadata-by-path="metadataByPath"
-      />
+        height="100%"
+        flexDirection="column"
+        :flexShrink="0"
+        :gap="1"
+        overflow="hidden"
+      >
+        <MusicListPanel
+          :songs="songs"
+          :current-index="playingIndex"
+          :selected-index="selectedIndex"
+          :is-focused="focusArea === 'list'"
+          :width="listWidth"
+          :available-height="contentHeight"
+          :metadata-by-path="metadataByPath"
+        />
+      </Box>
 
       <Box width="100%" height="100%" flexDirection="column" :flexGrow="1" :minWidth="1" overflow="hidden">
-        <SongInfo v-if="contentHeight >= 7" :song="song" />
-
         <LyricsPanel :lyrics="lyrics" :active-index="activeIndex" :active-word-index="activeWordIndex"
-          :is-loading="lyricsLoading" :error="lyricsError" :terminal-height="terminalHeight" />
+          :is-loading="lyricsLoading" :error="lyricsError" :song="song" :available-height="contentHeight" />
       </Box>
     </Box>
 

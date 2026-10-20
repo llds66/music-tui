@@ -2,6 +2,7 @@
 import { computed, ref, watch } from 'vue'
 import { Box, Text } from 'vue-termui'
 import type { MusicFile } from '../services/musicLibrary'
+import { theme } from '../theme'
 
 type SongMetadata = {
   title?: string
@@ -20,9 +21,9 @@ const props = defineProps<{
 
 const scrollOffset = ref(0)
 
-// 边框占两行，标题占一行，其余空间全部用于歌曲窗口。
+// 标题和短分隔线占两行，其余空间全部用于歌曲窗口。
 const visibleRowCount = computed(() =>
-  Math.max(1, props.availableHeight - 3),
+  Math.max(1, props.availableHeight - 2),
 )
 
 const visibleSongs = computed(() => {
@@ -75,7 +76,9 @@ watch(
 
 function rowText(song: MusicFile, index: number) {
   const metadata = props.metadataByPath[song.path]
-  const marker = index === props.currentIndex ? '▶' : ' '
+  const marker = index === props.currentIndex
+    ? '▸'
+    : index === props.selectedIndex ? '›' : ' '
   const number = String(index + 1).padStart(indexWidth.value, ' ')
   const title = metadata?.title || song.name
   const artist = metadata?.artist ? ` · ${metadata.artist}` : ''
@@ -87,26 +90,25 @@ function rowText(song: MusicFile, index: number) {
 <template>
   <Box
     :width="width"
-    height="100%"
     flexDirection="column"
+    :flexGrow="1"
     :flexShrink="0"
-    border
-    borderStyle="rounded"
-    :borderColor="isFocused ? '#edc878' : '#34414a'"
+    :minHeight="1"
     overflow="hidden"
   >
     <Text
       width="100%"
-      :fg="isFocused ? '#edc878' : '#9aabb8'"
+      :fg="isFocused ? theme.primary : theme.secondary"
       :bold="isFocused"
-      textAlign="center"
       wrapMode="none"
-      truncate
+      :truncate="true"
     >
-      歌曲列表{{ isFocused ? ' · 已聚焦' : '' }}
+      播放列表
     </Text>
 
-    <Text v-if="songs.length === 0" fg="#62727d">
+    <Text :fg="theme.divider" wrapMode="none">────────</Text>
+
+    <Text v-if="songs.length === 0" :fg="theme.muted">
       暂无本地歌曲
     </Text>
 
@@ -115,11 +117,10 @@ function rowText(song: MusicFile, index: number) {
       v-else
       :key="item.song.id"
       width="100%"
-      :fg="item.index === currentIndex ? '#edc878' : item.index === selectedIndex ? '#67d9ef' : '#9aabb8'"
-      :bg="item.index === selectedIndex ? '#28323a' : undefined"
+      :fg="item.index === currentIndex ? theme.accent : item.index === selectedIndex ? theme.primary : theme.secondary"
       :bold="item.index === currentIndex || item.index === selectedIndex"
       wrapMode="none"
-      truncate
+      :truncate="true"
     >
       {{ rowText(item.song, item.index) }}
     </Text>

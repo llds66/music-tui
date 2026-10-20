@@ -2,6 +2,7 @@
 import { computed } from 'vue'
 import { Box, Text, ProgressBar } from 'vue-termui'
 import { formatTime } from '../utils/formatTime'
+import { theme } from '../theme'
 
 const props = defineProps<{
   currentTime: number
@@ -32,11 +33,11 @@ const progressWidth = computed(() => {
       flexDirection="row"
       justifyContent="space-between"
     >
-      <Text fg="#d9e0e5">
+      <Text :fg="theme.primary">
         {{ formatTime(currentTime) }}
       </Text>
 
-      <Text fg="#9aabb8">
+      <Text :fg="theme.secondary">
         {{ formatTime(duration) }}
       </Text>
     </Box>
@@ -45,8 +46,8 @@ const progressWidth = computed(() => {
       :value="currentTime"
       :max="duration"
       :width="progressWidth"
-      color="#edc878"
-      trackColor="#34414a"
+      :color="theme.accent"
+      :trackColor="theme.divider"
       char="━"
     />
   </Box>

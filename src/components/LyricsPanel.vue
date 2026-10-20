@@ -3,6 +3,7 @@ import { computed } from 'vue'
 import { Box, Text, StyledText, bold, fg, type TextChunk } from 'vue-termui'
 import stringWidth from 'string-width'
 import type { LyricLine } from '../services/lyrics'
+import { theme } from '../theme'
 
 const props = defineProps<{
   lyrics: LyricLine[]
@@ -10,19 +11,18 @@ const props = defineProps<{
   activeWordIndex: number
   isLoading: boolean
   error: string | null
-  terminalHeight: number
+  song: {
+    title: string
+    artist: string
+    album: string
+  }
+  availableHeight: number
 }>()
 
-// 根据终端高度调整歌词数量
-const visibleLineCount = computed(() => {
-  const height = props.terminalHeight
-
-  if (height >= 30) return 7
-  if (height >= 20) return 5
-  if (height >= 14) return 3
-
-  return 1
-})
+// 标题和分隔线各占一行；歌词之间保留一行间距。
+const visibleLineCount = computed(() =>
+  Math.max(1, Math.floor((props.availableHeight - 1) / 2)),
+)
 
 // 以当前歌词为中心截取可见歌词
 const visibleLyrics = computed(() => {
@@ -44,8 +44,6 @@ const visibleLyrics = computed(() => {
     }
   })
 })
-
-const isCompact = computed(() => props.terminalHeight < 20)
 
 const statusText = computed(() => {
   if (props.isLoading) return '正在获取歌词...'
@@ -70,9 +68,16 @@ const activeLineText = computed(() => {
   return { text, offsets, wordCount: words.length, width: stringWidth(text) }
 })
 
-const sung = fg('#edc878')
-const current = fg('#ffe4a3')
-const upcoming = fg('#62727d')
+const sung = fg(theme.accent)
+const current = fg(theme.accent)
+const upcoming = fg(theme.secondary)
+
+function lyricColor(index: number, active: boolean) {
+  if (active) return theme.accent
+
+  const distance = Math.abs(index - Math.max(props.activeIndex, 0))
+  return distance <= 1 ? theme.secondary : theme.muted
+}
 
 // 每次逐字推进最多生成三个富文本片段，不再创建逐字组件和布局节点。
 const activeLineContent = computed(() => {
@@ -94,22 +99,31 @@ const activeLineContent = computed(() => {
 </script>
 
 <template>
-  <Box width="100%" flexDirection="column" :flexGrow="1" :flexShrink="1" :minHeight="3" border borderStyle="rounded"
-    borderColor="#34414a" alignItems="center" justifyContent="center" overflow="hidden" :gap="isCompact ? 0 : 1">
-    <Text v-if="statusText" fg="#62727d">
-      {{ statusText }}
+  <Box width="100%" flexDirection="column" :flexGrow="1" :flexShrink="1" :minHeight="3"
+    overflow="hidden" :gap="0">
+    <Text width="100%" :fg="theme.secondary" wrapMode="none" :truncate="true">
+      {{ song.title }}（{{ song.artist }} · {{ song.album }}）
     </Text>
+    <Text width="100%" :fg="theme.divider" wrapMode="none" :truncate="true">────────</Text>
 
-    <template v-else>
-      <template v-for="line in visibleLyrics" :key="line.index">
-        <!-- 当前行：单个 Text 显示逐字富文本，由外层 Box 保持居中 -->
-        <Text v-if="line.active && line.words.length > 0" :content="activeLineContent" :width="activeLineText.width"
-          wrapMode="none" />
+    <!-- 标题紧随歌曲信息；只在剩余空间内稳定居中歌词窗口。 -->
+    <Box width="100%" :maxWidth="72" flexDirection="column" :flexGrow="1" :flexShrink="1"
+      alignSelf="center" alignItems="center" justifyContent="center" :gap="1" overflow="hidden">
+      <Text v-if="statusText" :fg="theme.muted">
+        {{ statusText }}
+      </Text>
 
-        <!-- 其他歌词行 -->
-        <Text v-else width="100%" textAlign="center" wrapMode="none" truncate
-          :fg="line.active ? '#edc878' : '#62727d'" :bold="line.active">{{ line.text || ' ' }}</Text>
+      <template v-else>
+        <template v-for="line in visibleLyrics" :key="line.index">
+          <!-- 当前行：单个 Text 显示逐字富文本，由外层 Box 保持居中 -->
+          <Text v-if="line.active && line.words.length > 0" :content="activeLineContent" :width="activeLineText.width"
+            wrapMode="none" />
+
+          <!-- 其他歌词行 -->
+          <Text v-else width="100%" textAlign="center" wrapMode="none" :truncate="true"
+            :fg="lyricColor(line.index, line.active)" :bold="line.active">{{ line.text || ' ' }}</Text>
+        </template>
       </template>
-    </template>
+    </Box>
   </Box>
 </template>
