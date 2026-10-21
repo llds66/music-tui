@@ -21,9 +21,9 @@ const props = defineProps<{
 
 const scrollOffset = ref(0)
 
-// 标题和短分隔线占两行，其余空间全部用于歌曲窗口。
+// 标题、分隔线和一行空白占三行，歌曲之间也留一行空白。
 const visibleRowCount = computed(() =>
-  Math.max(1, props.availableHeight - 2),
+  Math.max(1, Math.floor((props.availableHeight - 2) / 2)),
 )
 
 const visibleSongs = computed(() => {
@@ -74,16 +74,12 @@ watch(
   { immediate: true },
 )
 
-function rowText(song: MusicFile, index: number) {
+function songText(song: MusicFile) {
   const metadata = props.metadataByPath[song.path]
-  const marker = index === props.currentIndex
-    ? '▸'
-    : index === props.selectedIndex ? '›' : ' '
-  const number = String(index + 1).padStart(indexWidth.value, ' ')
   const title = metadata?.title || song.name
   const artist = metadata?.artist ? ` · ${metadata.artist}` : ''
 
-  return `${marker} ${number}. ${title}${artist}`
+  return `${title}${artist}`
 }
 </script>
 
@@ -108,22 +104,37 @@ function rowText(song: MusicFile, index: number) {
     </Text>
 
     <Text width="100%" :fg="theme.divider" textAlign="center" wrapMode="none">────────</Text>
+    <Box width="100%" :height="1" :flexShrink="0" />
 
     <Text v-if="songs.length === 0" :fg="theme.muted">
       暂无本地歌曲
     </Text>
 
-    <Text
-      v-for="item in visibleSongs"
-      v-else
-      :key="item.song.id"
-      width="100%"
-      :fg="item.index === currentIndex ? theme.accent : item.index === selectedIndex ? theme.primary : theme.secondary"
-      :bold="item.index === currentIndex || item.index === selectedIndex"
-      wrapMode="none"
-      :truncate="true"
-    >
-      {{ rowText(item.song, item.index) }}
-    </Text>
+    <Box v-else width="100%" flexDirection="column" :gap="1" :flexGrow="1" overflow="hidden">
+      <Box
+        v-for="item in visibleSongs"
+        :key="item.song.id"
+        width="100%"
+        flexDirection="row"
+        :gap="1"
+        :flexShrink="0"
+        overflow="hidden"
+      >
+        <Text
+          :width="indexWidth"
+          :flexShrink="0"
+          :fg="theme.index"
+          wrapMode="none"
+        >{{ String(item.index + 1).padStart(indexWidth, '0') }}</Text>
+        <Text
+          :flexGrow="1"
+          :minWidth="1"
+          :fg="item.index === currentIndex ? theme.accent : item.index === selectedIndex ? theme.primary : theme.secondary"
+          :bold="item.index === currentIndex || item.index === selectedIndex"
+          wrapMode="none"
+          :truncate="true"
+        >{{ songText(item.song) }}</Text>
+      </Box>
+    </Box>
   </Box>
 </template>

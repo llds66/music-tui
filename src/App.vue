@@ -34,7 +34,6 @@ const props = defineProps<{ musicDirectory: string }>()
 const {
   song,
   metadata,
-  isPlaying,
   currentTime,
   duration,
   isReady,
@@ -82,13 +81,13 @@ const outerPadding = computed(() =>
 )
 const rootGap = computed(() => terminalHeight.value >= 16 ? 1 : 0)
 const progressHeight = computed(() => terminalHeight.value >= 16 ? 3 : 2)
-const toolbarHeight = computed(() => terminalHeight.value >= 20 ? 3 : 2)
+const toolbarHeight = 1
 const contentHeight = computed(() => {
   const childCount = 3
   const fixedHeight =
     outerPadding.value * 2 +
     progressHeight.value +
-    toolbarHeight.value +
+    toolbarHeight +
     rootGap.value * (childCount - 1)
 
   return Math.max(1, terminalHeight.value - fixedHeight)
@@ -382,7 +381,7 @@ onUnmounted(unsubscribeKeyboard)
     <ProgressPanel :current-time="currentTime" :duration="duration" :terminal-width="terminalWidth"
       :horizontal-padding="outerPadding" :compact="terminalHeight < 16" />
 
-    <PlayerToolbar :terminal-height="terminalHeight" :is-playing="isPlaying"
+    <PlayerToolbar :terminal-height="terminalHeight"
       :play-mode="PLAY_MODE_LABELS[playMode]" :list-visible="showMusicList" :list-focused="focusArea === 'list'" />
   </Box>
 </template>

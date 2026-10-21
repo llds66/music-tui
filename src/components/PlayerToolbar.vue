@@ -5,7 +5,6 @@ import { theme } from '../theme'
 
 const props = defineProps<{
   terminalHeight: number
-  isPlaying: boolean
   playMode: string
   listVisible: boolean
   listFocused: boolean
@@ -15,14 +14,7 @@ const isCompact = computed(() => props.terminalHeight < 20)
 </script>
 
 <template>
-  <Box width="100%" flexDirection="column" :flexShrink="0" :gap="isCompact ? 0 : 1" overflow="hidden">
-    <!-- 播放控制 -->
-    <Box width="100%" flexDirection="row" justifyContent="center">
-      <Text width="100%" :fg="theme.accent" textAlign="center" wrapMode="none" :truncate="true">
-        ‹ 上一首 · {{ isPlaying ? '暂停' : '播放' }} · 下一首 ›
-      </Text>
-    </Box>
-
+  <Box width="100%" flexDirection="column" :flexShrink="0" overflow="hidden">
     <!-- 正常窗口 -->
     <Box v-if="!isCompact" width="100%" flexDirection="row">
       <Text width="100%" :fg="theme.muted" wrapMode="none" :truncate="true">
