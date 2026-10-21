@@ -47,7 +47,7 @@ export class MpvService {
     /**
      * 启动 mpv 并建立 IPC 连接
      */
-    async start(): Promise<void> {
+    async start(metadataOnly = false): Promise<void> {
         if (this.socket) return
 
         this.process = spawn(
@@ -56,6 +56,7 @@ export class MpvService {
                 '--no-video',
                 '--idle=yes',
                 '--force-window=no',
+                ...(metadataOnly ? ['--no-config', '--ao=null', '--pause'] : []),
                 `--input-ipc-server=${this.pipeName}`,
             ],
             {
@@ -63,6 +64,9 @@ export class MpvService {
                 windowsHide: true,
             },
         )
+
+        // spawn 失败时仍由下方的连接超时路径报告，避免未处理的 error 事件。
+        this.process.on('error', () => {})
 
         for (let i = 0; i < 50; i++) {
             if (this.process.exitCode !== null) {

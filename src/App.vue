@@ -24,12 +24,16 @@ import {
 import { usePlayer } from './composables/usePlayer'
 import { useTerminalSize } from './composables/useTerminalSize'
 import { theme } from './theme'
+import { stat } from 'node:fs/promises'
+import { BackgroundMetadataReader } from './services/backgroundMetadata'
+import { MetadataCache, type SongMetadata } from './services/metadataCache'
 
 const { terminalHeight, terminalWidth } = useTerminalSize()
 const props = defineProps<{ musicDirectory: string }>()
 
 const {
   song,
+  metadata,
   isPlaying,
   currentTime,
   duration,
@@ -66,11 +70,12 @@ const {
 
 const exit = useExit()
 type FocusArea = 'list' | 'player'
-type KnownMetadata = { title?: string; artist?: string }
-
 const focusArea = ref<FocusArea>('player')
 const selectedIndex = ref(-1)
-const metadataByPath = reactive<Record<string, KnownMetadata>>({})
+const metadataByPath = reactive<Record<string, SongMetadata>>({})
+const metadataCache = new MetadataCache()
+const backgroundMetadata = new BackgroundMetadataReader(metadataCache)
+const pendingMetadataWrites = new Set<Promise<void>>()
 
 const outerPadding = computed(() =>
   terminalHeight.value >= 12 && terminalWidth.value >= 40 ? 1 : 0,
@@ -113,11 +118,31 @@ let exiting = false
 onMounted(async () => {
   await loadDirectory(props.musicDirectory)
 
+  await metadataCache.load()
+  const uncached = [] as typeof songs.value
+  let next = 0
+  await Promise.all(Array.from({ length: Math.min(16, songs.value.length) }, async () => {
+    while (next < songs.value.length) {
+      const file = songs.value[next++]!
+      try {
+        const stamp = await stat(file.path)
+        const cached = metadataCache.get(file.path, stamp)
+        if (cached) metadataByPath[file.path] = cached
+        else uncached.push(file)
+      } catch {
+        uncached.push(file)
+      }
+    }
+  }))
+
   const firstSong = songs.value[0]
   if (!firstSong) return
 
   selectedIndex.value = currentIndex.value
   await init(firstSong.path)
+  void backgroundMetadata.scan(uncached, (file, value) => {
+    metadataByPath[file.path] = value
+  })
 })
 
 watch(showMusicList, (visible) => {
@@ -135,20 +160,19 @@ watch(currentIndex, (index) => {
   }
 })
 
-// 复用 mpv 已读取的元数据；歌曲播放过后，列表会保留其标题和歌手。
+// 播放器得到真实文件标签时，同步列表并进入持久化缓存。
 watch(
-  () => [loadedPath.value, song.value.title, song.value.artist] as const,
-  ([path, title, artist]) => {
-    if (!path || !title || title === '正在加载...') return
-
-    metadataByPath[path] = {
-      title: title === '未知歌曲' ? undefined : title,
-      artist:
-        !artist || artist === '未知歌手'
-          ? undefined
-          : artist,
-    }
+  metadata,
+  (result) => {
+    if (!result) return
+    metadataByPath[result.path] = result.value
+    const pending = stat(result.path).then((stamp) => {
+      metadataCache.put(result.path, stamp, result.value)
+    }).catch(() => {})
+    pendingMetadataWrites.add(pending)
+    void pending.finally(() => pendingMetadataWrites.delete(pending))
   },
+  { flush: 'sync' },
 )
 
 /**
@@ -217,7 +241,11 @@ async function quit() {
   if (exiting) return
 
   exiting = true
+  backgroundMetadata.stop()
   close()
+
+  await Promise.allSettled(pendingMetadataWrites)
+  await metadataCache.flush()
 
   // 先让 close() 引起的响应式更新完成，再销毁终端渲染器。
   await nextTick()
@@ -252,6 +280,10 @@ const unsubscribeEnded = onEnded(() => {
 })
 
 onUnmounted(unsubscribeEnded)
+onUnmounted(() => {
+  backgroundMetadata.stop()
+  void metadataCache.flush()
+})
 
 /**
  * 所有快捷键只在根组件注册一次，列表组件仅负责显示。

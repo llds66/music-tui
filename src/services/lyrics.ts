@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto'
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
-import { homedir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { resolve } from 'node:path'
+import { getCacheDirectory } from './cacheDirectory'
 
 /**
  * 歌词
@@ -36,25 +36,6 @@ interface LyricsApiResponse {
     code?: string
     message?: string
   }
-}
-
-function getCacheDirectory() {
-  if (process.platform === 'win32') {
-    return join(
-      process.env.LOCALAPPDATA ?? join(homedir(), 'AppData', 'Local'),
-      'music.tui',
-      'Cache',
-    )
-  }
-
-  if (process.platform === 'darwin') {
-    return join(homedir(), 'Library', 'Caches', 'music.tui')
-  }
-
-  return join(
-    process.env.XDG_CACHE_HOME ?? join(homedir(), '.cache'),
-    'music.tui',
-  )
 }
 
 const CACHE_DIR = getCacheDirectory()

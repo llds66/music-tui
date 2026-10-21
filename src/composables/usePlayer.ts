@@ -1,6 +1,7 @@
 
 import { onUnmounted, ref } from 'vue'
 import { MpvService } from '../services/mpv'
+import { metadataFromTags, type SongMetadata } from '../services/metadataCache'
 
 export type SongInfo = {
   title: string
@@ -26,6 +27,7 @@ export function usePlayer() {
     artist: '未知歌手',
     album: '未知专辑',
   })
+  const metadata = ref<{ path: string; value: SongMetadata } | null>(null)
 
   let disposed = false
   let currentPath = ''
@@ -41,7 +43,7 @@ export function usePlayer() {
    */
   async function loadMetadata(version: number) {
     try {
-      const [metadata, mediaTitle] = await Promise.all([
+      const [rawMetadata, mediaTitle] = await Promise.all([
         mpv.getMetadata(),
         mpv.getMediaTitle(),
       ])
@@ -50,7 +52,7 @@ export function usePlayer() {
       if (disposed || version !== loadVersion) return
 
       const tags = Object.fromEntries(
-        Object.entries(metadata ?? {}).map(([key, value]) => [
+        Object.entries(rawMetadata ?? {}).map(([key, value]) => [
           key.toLowerCase(),
           value,
         ]),
@@ -63,6 +65,11 @@ export function usePlayer() {
           tags.album_artist ||
           '未知歌手',
         album: tags.album || '未知专辑',
+      }
+      const actualMetadata = metadataFromTags(rawMetadata)
+      if (actualMetadata) {
+        // 只发布文件标签，不把 media-title 的文件名回退值写入缓存。
+        metadata.value = { path: currentPath, value: actualMetadata }
       }
     } catch (err) {
       if (version === loadVersion) setError(err)
@@ -197,6 +204,7 @@ export function usePlayer() {
     currentPath = path
     isLoading.value = true
     loadedPath.value = ''
+    metadata.value = null
 
     isPlaying.value = false
     isEnded.value = false
@@ -335,6 +343,7 @@ export function usePlayer() {
 
   return {
     song,
+    metadata,
     isPlaying,
     currentTime,
     duration,
