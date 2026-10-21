@@ -32,6 +32,7 @@ Thumbs.db
 
 music
 doc
+scripts/
 
 # npm package archives
 *.tgz
