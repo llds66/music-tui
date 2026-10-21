@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto'
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
-import { resolve } from 'node:path'
+import { homedir } from 'node:os'
+import { join, resolve } from 'node:path'
 
 /**
  * 歌词
@@ -37,7 +38,26 @@ interface LyricsApiResponse {
   }
 }
 
-const CACHE_DIR = resolve(process.cwd(), '.cache', 'lyrics')
+function getCacheDirectory() {
+  if (process.platform === 'win32') {
+    return join(
+      process.env.LOCALAPPDATA ?? join(homedir(), 'AppData', 'Local'),
+      'music.tui',
+      'Cache',
+    )
+  }
+
+  if (process.platform === 'darwin') {
+    return join(homedir(), 'Library', 'Caches', 'music.tui')
+  }
+
+  return join(
+    process.env.XDG_CACHE_HOME ?? join(homedir(), '.cache'),
+    'music.tui',
+  )
+}
+
+const CACHE_DIR = getCacheDirectory()
 
 function getCachePath(title: string, artist: string) {
   const key = `${title.trim().toLowerCase()}\0${artist.trim().toLowerCase()}`
@@ -70,6 +90,8 @@ export async function fetchLyrics(
   if (artist) {
     query.set('artist', artist)
   }
+  // TODO 后续新增配置页
+  query.set('provider', 'qq')
 
   const response = await fetch(
     `https://api.lyriva.xyz/lyriva/lyrics?${query}`,

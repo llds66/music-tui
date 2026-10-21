@@ -8,7 +8,6 @@ import {
   ref,
   watch,
 } from 'vue'
-import { resolve } from 'node:path'
 import { Box, onKeyDown, useExit } from 'vue-termui'
 
 import LyricsPanel from './components/LyricsPanel.vue'
@@ -27,6 +26,7 @@ import { useTerminalSize } from './composables/useTerminalSize'
 import { theme } from './theme'
 
 const { terminalHeight, terminalWidth } = useTerminalSize()
+const props = defineProps<{ musicDirectory: string }>()
 
 const {
   song,
@@ -65,8 +65,6 @@ const {
 } = useMusicLibrary()
 
 const exit = useExit()
-const musicDirectory = resolve(process.cwd(), 'music')
-
 type FocusArea = 'list' | 'player'
 type KnownMetadata = { title?: string; artist?: string }
 
@@ -113,7 +111,7 @@ let exiting = false
  * 启动时扫描目录并播放第一首
  */
 onMounted(async () => {
-  await loadDirectory(musicDirectory)
+  await loadDirectory(props.musicDirectory)
 
   const firstSong = songs.value[0]
   if (!firstSong) return

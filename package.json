@@ -1,26 +1,35 @@
 {
-  "name": "tui-music",
-  "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
+  "name": "music.tui",
+  "version": "0.1.0",
+  "description": "在终端中播放本地音乐并显示同步歌词的 TUI 播放器",
+  "homepage": "https://musictui.lldsss.com",
+  "type": "module",
+  "bin": {
+    "music-tui": "dist/main.js"
+  },
   "scripts": {
     "dev": "cross-env NODE_OPTIONS=\"--experimental-ffi --disable-warning=ExperimentalWarning\" vite",
     "build": "vite build",
     "start": "node --experimental-ffi --disable-warning=ExperimentalWarning dist/main.js",
     "test": "node scripts/test-mpv.ts",
-    "typecheck": "vue-tsc --noEmit"
+    "typecheck": "vue-tsc --noEmit",
+    "prepack": "pnpm build"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
-  "devEngines": {
-    "packageManager": {
-      "name": "pnpm",
-      "version": "^11.13.1",
-      "onFail": "download"
-    }
-  },
-  "type": "module",
+  "keywords": [
+    "music",
+    "player",
+    "tui",
+    "terminal",
+    "mpv"
+  ],
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "author": "llds <858400061@qq.com>",
+  "license": "MIT",
+  "packageManager": "pnpm@11.13.1",
   "dependencies": {
     "@opentui/core": "^0.6.6",
     "ascii.rest": "0.4.0",
@@ -35,5 +44,8 @@
     "typescript": "5.9.3",
     "vite": "^8.3.4",
     "vue-tsc": "3.3.7"
+  },
+  "engines": {
+    "node": ">=26.3.0"
   }
 }
