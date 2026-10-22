@@ -1,6 +1,6 @@
 import { createApp } from 'vue-termui'
 import App from './App.vue'
-import { parseCliArguments } from './cli'
+import { ensureMpvAvailable, MpvNotFoundError, parseCliArguments } from './cli'
 import { theme } from './theme'
 
 try {
@@ -9,6 +9,8 @@ try {
   if (result.kind === 'message') {
     console.log(result.message)
   } else {
+    await ensureMpvAvailable()
+
     // 终端网格外的像素余量使用终端背景色，和界面背景保持一致。
     if (process.stdout.isTTY) {
       process.stdout.write(`\x1b]11;${theme.background}\x1b\\`)
@@ -33,7 +35,9 @@ try {
   }
 } catch (error) {
   console.error(
-    error instanceof Error ? `music.tui: ${error.message}` : error,
+    error instanceof MpvNotFoundError
+      ? error.message
+      : error instanceof Error ? `music.tui: ${error.message}` : error,
   )
   process.exitCode = 1
 }
