@@ -1,14 +1,13 @@
 <script setup lang="ts">
 import {
   computed,
-  nextTick,
   onMounted,
   onUnmounted,
   reactive,
   ref,
   watch,
 } from 'vue'
-import { Box, onKeyDown, useExit } from 'vue-termui'
+import { Box, onKeyDown, useExit, useRenderer } from 'vue-termui'
 
 import LyricsPanel from './components/LyricsPanel.vue'
 import MusicBanner from './components/MusicBanner.vue'
@@ -71,6 +70,8 @@ const {
 } = useMusicLibrary()
 
 const exit = useExit()
+const renderer = useRenderer()
+const rendererClosed = (renderer as unknown as { closed: Promise<void> }).closed
 const currentView = ref<'player' | 'settings'>('player')
 const settingsPanel = ref<InstanceType<typeof SettingsPanel> | null>(null)
 const { settings, load: loadUserSettings, toggleShowLogo, flush: flushSettings } = useSettings()
@@ -121,6 +122,45 @@ const pendingDirections: SwitchDirection[] = []
 let switching = false
 let exiting = false
 
+const PERSISTENCE_WAIT_MS = 750
+const EXIT_TIMEOUT_MS = 2_000
+
+type ShutdownTimings = {
+  startedAt: number
+  backgroundStoppedAt?: number
+  playerClosedAt?: number
+  tuiDestroyedAt?: number
+  persistenceFinishedAt?: number
+}
+
+function waitForAtMost(promise: Promise<unknown>, timeoutMs: number): Promise<boolean> {
+  return new Promise((resolve) => {
+    const timer = setTimeout(() => resolve(false), timeoutMs)
+    promise.then(
+      () => {
+        clearTimeout(timer)
+        resolve(true)
+      },
+      () => {
+        clearTimeout(timer)
+        resolve(true)
+      },
+    )
+  })
+}
+
+function describeShutdownTimings(timings: ShutdownTimings): string {
+  const elapsed = (completedAt?: number) =>
+    completedAt === undefined ? '未完成' : `${completedAt - timings.startedAt}ms`
+
+  return [
+    `停止后台扫描 ${elapsed(timings.backgroundStoppedAt)}`,
+    `关闭 mpv ${elapsed(timings.playerClosedAt)}`,
+    `关闭 TUI ${elapsed(timings.tuiDestroyedAt)}`,
+    `保存设置和缓存 ${elapsed(timings.persistenceFinishedAt)}`,
+  ].join('；')
+}
+
 /**
  * 启动时扫描目录并播放第一首
  */
@@ -158,7 +198,7 @@ onMounted(async () => {
 watch(
   metadata,
   (result) => {
-    if (!result) return
+    if (!result || exiting) return
     metadataByPath[result.path] = result.value
     const pending = stat(result.path).then((stamp) => {
       metadataCache.put(result.path, stamp, result.value)
@@ -213,17 +253,51 @@ async function quit() {
   if (exiting) return
 
   exiting = true
+  const timings: ShutdownTimings = { startedAt: Date.now() }
+  const forceExitTimer = setTimeout(() => {
+    console.error(
+      `music.tui: 退出超时（${EXIT_TIMEOUT_MS}ms；${describeShutdownTimings(timings)}），将强制结束。`,
+    )
+    if (timings.tuiDestroyedAt === undefined) exit()
+    process.exit(1)
+  }, EXIT_TIMEOUT_MS)
+  forceExitTimer.unref()
+
   pendingDirections.length = 0
-  backgroundMetadata.stop()
-  close()
+  metadataCache.stopScheduling()
 
-  await Promise.allSettled(pendingMetadataWrites)
-  await metadataCache.flush()
-  await flushSettings()
+  const backgroundStopped = backgroundMetadata.stop().then(
+    () => { timings.backgroundStoppedAt = Date.now() },
+    () => { timings.backgroundStoppedAt = Date.now() },
+  )
+  const playerClosed = close().then(
+    () => { timings.playerClosedAt = Date.now() },
+    () => { timings.playerClosedAt = Date.now() },
+  )
 
-  // 先让 close() 引起的响应式更新完成，再销毁终端渲染器。
-  await nextTick()
+  // 终端资源优先恢复；缓存与设置只做有限时间的补充等待。
   exit()
+  const tuiClosed = rendererClosed.then(
+    () => { timings.tuiDestroyedAt = Date.now() },
+    () => { timings.tuiDestroyedAt = Date.now() },
+  )
+
+  const persistence = Promise.allSettled([
+    metadataCache.flush(),
+    flushSettings(),
+  ]).then(() => {
+    timings.persistenceFinishedAt = Date.now()
+  })
+
+  const persistenceFinished = await waitForAtMost(
+    persistence,
+    PERSISTENCE_WAIT_MS,
+  )
+  await Promise.allSettled([backgroundStopped, playerClosed, tuiClosed])
+
+  // 已确认终端、mpv 和持久化均完成后，结束可能由 HTTP keep-alive
+  // 等非关键句柄继续保持的 Node 进程，确保 shell 立即可用。
+  if (persistenceFinished) process.exit(0)
 }
 
 const unsubscribeEnded = onEnded(() => {
@@ -256,8 +330,8 @@ const unsubscribeEnded = onEnded(() => {
 
 onUnmounted(unsubscribeEnded)
 onUnmounted(() => {
-  backgroundMetadata.stop()
-  void metadataCache.flush()
+  void backgroundMetadata.stop()
+  metadataCache.stopScheduling()
 })
 
 /**

@@ -37,6 +37,8 @@ export class MpvService {
     private socket: Socket | null = null
     private buffer = ''
     private requestId = 0
+    private closed = false
+    private closePromise: Promise<void> | null = null
 
     private readonly pipeName = `\\\\.\\pipe\\tui-music-${randomUUID()}`
 
@@ -48,6 +50,10 @@ export class MpvService {
      * 启动 mpv 并建立 IPC 连接
      */
     async start(metadataOnly = false): Promise<void> {
+        if (this.closed) {
+            throw new Error('mpv 服务已关闭')
+        }
+
         if (this.socket) return
 
         this.process = spawn(
@@ -69,7 +75,7 @@ export class MpvService {
         this.process.on('error', () => {})
 
         for (let i = 0; i < 50; i++) {
-            if (this.process.exitCode !== null) {
+            if (!this.process || this.process.exitCode !== null) {
                 throw new Error('mpv 进程已退出')
             }
 
@@ -81,7 +87,7 @@ export class MpvService {
             }
         }
 
-        this.close()
+        void this.close()
         throw new Error('连接 mpv IPC 超时')
     }
 
@@ -93,6 +99,12 @@ export class MpvService {
             const socket = connect(this.pipeName)
 
             socket.once('connect', () => {
+                if (this.closed) {
+                    socket.destroy()
+                    reject(new Error('mpv 服务已关闭'))
+                    return
+                }
+
                 this.socket = socket
 
                 socket.on('data', (chunk: Buffer) => {
@@ -361,7 +373,10 @@ export class MpvService {
     /**
      * 关闭播放器
      */
-    close(): void {
+    close(): Promise<void> {
+        if (this.closePromise) return this.closePromise
+
+        this.closed = true
         this.rejectPending(new Error('mpv 服务已关闭'))
 
         this.propertyListeners.clear()
@@ -370,9 +385,34 @@ export class MpvService {
         this.socket?.destroy()
         this.socket = null
 
-        this.process?.kill()
+        const process = this.process
         this.process = null
 
         this.buffer = ''
+
+        if (!process || process.exitCode !== null) {
+            this.closePromise = Promise.resolve()
+            return this.closePromise
+        }
+
+        this.closePromise = new Promise((resolve) => {
+            let settled = false
+            const finish = () => {
+                if (settled) return
+                settled = true
+                resolve()
+            }
+
+            process.once('close', finish)
+            process.once('error', finish)
+
+            try {
+                process.kill()
+            } catch {
+                finish()
+            }
+        })
+
+        return this.closePromise
     }
 }

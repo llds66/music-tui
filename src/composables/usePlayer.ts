@@ -32,6 +32,7 @@ export function usePlayer() {
   let disposed = false
   let currentPath = ''
   let loadVersion = 0
+  let closePromise: Promise<void> | null = null
 
   function setError(err: unknown) {
     if (disposed) return
@@ -322,8 +323,8 @@ export function usePlayer() {
   /**
    * 关闭播放器
    */
-  function close() {
-    if (disposed) return
+  function close(): Promise<void> {
+    if (closePromise) return closePromise
 
     disposed = true
     isReady.value = false
@@ -336,10 +337,13 @@ export function usePlayer() {
     unsubscribeProperty()
     unsubscribeLifecycle()
 
-    mpv.close()
+    closePromise = mpv.close()
+    return closePromise
   }
 
-  onUnmounted(close)
+  onUnmounted(() => {
+    void close()
+  })
 
   return {
     song,

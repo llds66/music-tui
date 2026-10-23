@@ -34,6 +34,8 @@ try {
         musicDirectory,
       }, {
         backgroundColor: theme.background,
+        exitOnCtrlC: false,
+        exitSignals: [],
       })
       app.mount()
 

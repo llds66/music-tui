@@ -8,6 +8,7 @@ type MetadataFound = (file: MusicFile, metadata: SongMetadata) => void
 /** 独立静音 mpv 进程，与正在播放的 mpv 完全分离。 */
 export class BackgroundMetadataReader {
   private stopped = false
+  private stopPromise: Promise<void> | null = null
   private services = new Set<MpvService>()
   private cancellations = new Set<() => void>()
   private readonly cache: MetadataCache
@@ -45,7 +46,7 @@ export class BackgroundMetadataReader {
       } catch {
         // mpv 不可用时保留文件名和已有缓存。
       } finally {
-        mpv.close()
+        await mpv.close()
         this.services.delete(mpv)
       }
     }
@@ -94,10 +95,17 @@ export class BackgroundMetadataReader {
     }
   }
 
-  stop(): void {
+  stop(): Promise<void> {
+    if (this.stopPromise) return this.stopPromise
+
     this.stopped = true
     for (const cancel of this.cancellations) cancel()
-    for (const service of this.services) service.close()
     this.cancellations.clear()
+
+    this.stopPromise = Promise.allSettled(
+      [...this.services].map((service) => service.close()),
+    ).then(() => {})
+
+    return this.stopPromise
   }
 }

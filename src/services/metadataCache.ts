@@ -68,6 +68,7 @@ export class MetadataCache {
   private dirty = false
   private timer: ReturnType<typeof setTimeout> | null = null
   private writing: Promise<void> | null = null
+  private acceptsWrites = true
 
   constructor(directory = getCacheDirectory()) {
     this.directory = directory
@@ -104,6 +105,8 @@ export class MetadataCache {
   }
 
   put(filePath: string, stamp: FileStamp, metadata: SongMetadata): void {
+    if (!this.acceptsWrites) return
+
     const title = cleanText(metadata.title)
     const artist = cleanText(metadata.artist)
     const album = cleanText(metadata.album)
@@ -153,6 +156,15 @@ export class MetadataCache {
       await this.writing
     } finally {
       this.writing = null
+    }
+  }
+
+  /** 停止接收新条目，并取消尚未开始的延迟写入。 */
+  stopScheduling(): void {
+    this.acceptsWrites = false
+    if (this.timer) {
+      clearTimeout(this.timer)
+      this.timer = null
     }
   }
 }
