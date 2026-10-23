@@ -31,7 +31,7 @@ export async function parseCliArguments(
   }
 
   if (args.length === 1 && (args[0] === '--version' || args[0] === '-v')) {
-    return { kind: 'message', message: 'music.tui 0.1.2' }
+    return { kind: 'message', message: 'music.tui 0.2.0' }
   }
 
   const positional = args[0] === '--' ? args.slice(1) : args
