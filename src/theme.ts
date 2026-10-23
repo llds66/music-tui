@@ -6,5 +6,6 @@ export const theme = {
   index: '#625C55',
   muted: '#514C46',
   accent: '#D87A55',
+  accentSoft: '#B98268',
   divider: '#302D29',
 } as const

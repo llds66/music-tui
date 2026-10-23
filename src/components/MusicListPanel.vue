@@ -12,8 +12,6 @@ type SongMetadata = {
 const props = defineProps<{
   songs: MusicFile[]
   currentIndex: number
-  selectedIndex: number
-  isFocused: boolean
   width: number
   availableHeight: number
   metadataByPath: Readonly<Record<string, SongMetadata>>
@@ -43,19 +41,25 @@ const indexWidth = computed(() =>
   Math.max(2, String(props.songs.length).length),
 )
 
-function ensureSelectedVisible() {
+function ensurePlayingVisible() {
   const count = visibleRowCount.value
   const maxOffset = Math.max(0, props.songs.length - count)
 
-  if (props.selectedIndex < 0 || props.songs.length === 0) {
+  if (props.songs.length === 0) {
     scrollOffset.value = 0
     return
   }
 
-  if (props.selectedIndex < scrollOffset.value) {
-    scrollOffset.value = props.selectedIndex
-  } else if (props.selectedIndex >= scrollOffset.value + count) {
-    scrollOffset.value = props.selectedIndex - count + 1
+  // 加载新歌曲期间不重置滚动；待播放器确认文件后再跟随当前播放项。
+  if (props.currentIndex < 0) {
+    scrollOffset.value = Math.min(scrollOffset.value, maxOffset)
+    return
+  }
+
+  if (props.currentIndex < scrollOffset.value) {
+    scrollOffset.value = props.currentIndex
+  } else if (props.currentIndex >= scrollOffset.value + count) {
+    scrollOffset.value = props.currentIndex - count + 1
   }
 
   scrollOffset.value = Math.min(
@@ -66,11 +70,11 @@ function ensureSelectedVisible() {
 
 watch(
   () => [
-    props.selectedIndex,
+    props.currentIndex,
     props.songs.length,
     visibleRowCount.value,
   ],
-  ensureSelectedVisible,
+  ensurePlayingVisible,
   { immediate: true },
 )
 
@@ -94,8 +98,7 @@ function songText(song: MusicFile) {
   >
     <Text
       width="100%"
-      :fg="isFocused ? theme.primary : theme.secondary"
-      :bold="isFocused"
+      :fg="theme.secondary"
       textAlign="center"
       wrapMode="none"
       :truncate="true"
@@ -129,8 +132,8 @@ function songText(song: MusicFile) {
         <Text
           :flexGrow="1"
           :minWidth="1"
-          :fg="item.index === currentIndex ? theme.accent : item.index === selectedIndex ? theme.primary : theme.secondary"
-          :bold="item.index === currentIndex || item.index === selectedIndex"
+          :fg="item.index === currentIndex ? theme.accent : theme.secondary"
+          :bold="item.index === currentIndex"
           wrapMode="none"
           :truncate="true"
         >{{ songText(item.song) }}</Text>

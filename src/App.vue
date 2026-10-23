@@ -13,6 +13,7 @@ import { Box, onKeyDown, useExit } from 'vue-termui'
 import LyricsPanel from './components/LyricsPanel.vue'
 import MusicBanner from './components/MusicBanner.vue'
 import MusicListPanel from './components/MusicListPanel.vue'
+import PlaybackTime from './components/PlaybackTime.vue'
 import PlayerToolbar from './components/PlayerToolbar.vue'
 import ProgressPanel from './components/ProgressPanel.vue'
 
@@ -36,6 +37,7 @@ const {
   metadata,
   currentTime,
   duration,
+  isPlaying,
   isReady,
   isLoading: playerLoading,
   loadedPath,
@@ -57,7 +59,6 @@ const {
 
 const {
   songs,
-  currentIndex,
   playMode,
   loadDirectory,
   nextSong,
@@ -68,9 +69,6 @@ const {
 } = useMusicLibrary()
 
 const exit = useExit()
-type FocusArea = 'list' | 'player'
-const focusArea = ref<FocusArea>('player')
-const selectedIndex = ref(-1)
 const metadataByPath = reactive<Record<string, SongMetadata>>({})
 const metadataCache = new MetadataCache()
 const backgroundMetadata = new BackgroundMetadataReader(metadataCache)
@@ -80,13 +78,13 @@ const outerPadding = computed(() =>
   terminalHeight.value >= 12 && terminalWidth.value >= 40 ? 1 : 0,
 )
 const rootGap = computed(() => terminalHeight.value >= 16 ? 1 : 0)
-const progressHeight = computed(() => terminalHeight.value >= 16 ? 3 : 2)
+const progressHeight = 1
 const toolbarHeight = 1
 const contentHeight = computed(() => {
   const childCount = 3
   const fixedHeight =
     outerPadding.value * 2 +
-    progressHeight.value +
+    progressHeight +
     toolbarHeight +
     rootGap.value * (childCount - 1)
 
@@ -101,13 +99,19 @@ const listWidth = computed(() =>
   Math.min(44, Math.max(28, Math.floor(terminalWidth.value * 0.36))),
 )
 const bannerHeight = ref(1)
+const sidebarGap = computed(() => contentHeight.value >= 18 ? 2 : 1)
+const bannerAvailableHeight = computed(() =>
+  Math.max(1, contentHeight.value - 1 - sidebarGap.value * 2),
+)
 const listAvailableHeight = computed(() =>
-  Math.max(1, contentHeight.value - bannerHeight.value - 2),
+  Math.max(1, contentHeight.value - bannerHeight.value - 1 - sidebarGap.value * 2),
 )
 const playingIndex = computed(() =>
   songs.value.findIndex((item) => item.path === loadedPath.value),
 )
 
+type SwitchDirection = 'next' | 'previous'
+const pendingDirections: SwitchDirection[] = []
 let switching = false
 let exiting = false
 
@@ -137,26 +141,10 @@ onMounted(async () => {
   const firstSong = songs.value[0]
   if (!firstSong) return
 
-  selectedIndex.value = currentIndex.value
   await init(firstSong.path)
   void backgroundMetadata.scan(uncached, (file, value) => {
     metadataByPath[file.path] = value
   })
-})
-
-watch(showMusicList, (visible) => {
-  if (!visible) focusArea.value = 'player'
-})
-
-watch(currentIndex, (index) => {
-  if (index < 0) {
-    selectedIndex.value = -1
-  } else if (
-    selectedIndex.value < 0 ||
-    focusArea.value === 'player'
-  ) {
-    selectedIndex.value = index
-  }
 })
 
 // 播放器得到真实文件标签时，同步列表并进入持久化缓存。
@@ -177,69 +165,48 @@ watch(
 /**
  * 切换音乐
  */
-async function switchSong(direction: 'next' | 'previous') {
+function switchSong(direction: SwitchDirection) {
   if (
     !isReady.value ||
-    playerLoading.value ||
-    switching ||
+    exiting ||
     songs.value.length === 0
   ) {
     return
   }
 
-  switching = true
-
-  try {
-    const target =
-      direction === 'next' ? nextSong() : previousSong()
-
-    if (!target) return
-
-    await loadSong(target.path)
-  } finally {
-    switching = false
-  }
+  pendingDirections.push(direction)
+  void drainSwitches()
 }
 
-function moveSelection(direction: -1 | 1) {
-  const count = songs.value.length
-  if (count === 0) return
-
-  const current = selectedIndex.value >= 0
-    ? selectedIndex.value
-    : Math.max(currentIndex.value, 0)
-
-  selectedIndex.value = (current + direction + count) % count
-}
-
-async function playSelectedSong() {
-  const index = selectedIndex.value
-  const target = songs.value[index]
-
-  if (
-    !target ||
-    !isReady.value ||
-    playerLoading.value ||
-    switching ||
-    index === playingIndex.value
-  ) {
+async function drainSwitches() {
+  if (switching || playerLoading.value || !isReady.value || exiting || pendingDirections.length === 0) {
     return
   }
 
   switching = true
 
   try {
-    await loadSong(target.path)
-    selectSong(index)
+    // 同一轮快速按键依次沿用现有列表边界规则，只加载最终目标。
+    let target: (typeof songs.value)[number] | null = null
+    for (const direction of pendingDirections.splice(0)) {
+      target = direction === 'next' ? nextSong() : previousSong()
+    }
+    if (target) await loadSong(target.path)
   } finally {
     switching = false
+    if (pendingDirections.length > 0 && !playerLoading.value) void drainSwitches()
   }
 }
+
+watch(playerLoading, (loading) => {
+  if (!loading) void drainSwitches()
+})
 
 async function quit() {
   if (exiting) return
 
   exiting = true
+  pendingDirections.length = 0
   backgroundMetadata.stop()
   close()
 
@@ -274,6 +241,7 @@ const unsubscribeEnded = onEnded(() => {
       selectSong(nextIndex)
     } finally {
       switching = false
+      if (pendingDirections.length > 0 && !playerLoading.value) void drainSwitches()
     }
   })()
 })
@@ -289,11 +257,6 @@ onUnmounted(() => {
  */
 const unsubscribeKeyboard = onKeyDown((key) => {
   switch (key.name) {
-    case 'tab':
-      if (!showMusicList.value) return
-      focusArea.value = focusArea.value === 'list' ? 'player' : 'list'
-      break
-
     case 'space':
       void togglePlay()
       break
@@ -307,28 +270,19 @@ const unsubscribeKeyboard = onKeyDown((key) => {
       break
 
     case 'up':
-      if (focusArea.value === 'list') {
-        moveSelection(-1)
-      } else {
-        void switchSong('previous')
-      }
+      switchSong('previous')
       break
 
     case 'down':
-      if (focusArea.value === 'list') {
-        moveSelection(1)
-      } else {
-        void switchSong('next')
-      }
-      break
-
-    case 'return':
-    case 'enter':
-      if (focusArea.value !== 'list') return
-      void playSelectedSong()
+      switchSong('next')
       break
 
     case 'q':
+      void quit()
+      break
+
+    case 'c':
+      if (!key.ctrl) return
       void quit()
       break
 
@@ -356,16 +310,15 @@ onUnmounted(unsubscribeKeyboard)
         height="100%"
         flexDirection="column"
         :flexShrink="0"
-        :gap="2"
+        :gap="sidebarGap"
         overflow="hidden"
       >
-        <MusicBanner :width="listWidth" :available-height="contentHeight"
+        <MusicBanner :width="listWidth" :available-height="bannerAvailableHeight"
           @height-change="bannerHeight = $event" />
+        <PlaybackTime :current-time="currentTime" :duration="duration" :width="listWidth" />
         <MusicListPanel
           :songs="songs"
           :current-index="playingIndex"
-          :selected-index="selectedIndex"
-          :is-focused="focusArea === 'list'"
           :width="listWidth"
           :available-height="listAvailableHeight"
           :metadata-by-path="metadataByPath"
@@ -373,15 +326,18 @@ onUnmounted(unsubscribeKeyboard)
       </Box>
 
       <Box width="100%" height="100%" flexDirection="column" :flexGrow="1" :minWidth="1" overflow="hidden">
+        <PlaybackTime v-if="!showMusicList && contentHeight >= 5" :current-time="currentTime"
+          :duration="duration" :width="terminalWidth - outerPadding * 2" />
         <LyricsPanel :lyrics="lyrics" :active-index="activeIndex" :active-word-index="activeWordIndex"
-          :is-loading="lyricsLoading" :error="lyricsError" :song="song" :available-height="contentHeight" />
+          :is-loading="lyricsLoading" :error="lyricsError" :song="song"
+          :available-height="contentHeight - (!showMusicList && contentHeight >= 5 ? 1 : 0)" />
       </Box>
     </Box>
 
     <ProgressPanel :current-time="currentTime" :duration="duration" :terminal-width="terminalWidth"
-      :horizontal-padding="outerPadding" :compact="terminalHeight < 16" />
+      :horizontal-padding="outerPadding" />
 
-    <PlayerToolbar :terminal-height="terminalHeight"
-      :play-mode="PLAY_MODE_LABELS[playMode]" :list-visible="showMusicList" :list-focused="focusArea === 'list'" />
+    <PlayerToolbar :available-width="terminalWidth - outerPadding * 2" :is-playing="isPlaying"
+      :play-mode="PLAY_MODE_LABELS[playMode]" />
   </Box>
 </template>
