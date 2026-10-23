@@ -2,7 +2,6 @@
   "name": "music.tui",
   "version": "0.2.0",
   "description": "在终端中播放本地音乐并显示同步歌词的 TUI 播放器",
-  "homepage": "https://musictui.lldsss.com",
   "type": "module",
   "bin": {
     "music-tui": "dist/main.js"
@@ -26,6 +25,14 @@
     "README.md",
     "LICENSE"
   ],
+  "homepage": "https://npmx.dev/package/music.tui",
+  "bugs": {
+    "url": "https://github.com/llds66/music-tui/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/llds66/music-tui.git"
+  },
   "author": "llds <858400061@qq.com>",
   "license": "MIT",
   "packageManager": "pnpm@11.13.1",
