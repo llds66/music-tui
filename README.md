@@ -1,19 +1,21 @@
+[![MUSIC.TUI](https://ascii.rest/banner/MUSIC.TUI.svg?color=f97316&font=bold&shadow=none&fill=block)](https://ascii.rest/banner/)
+
+
 # Music.TUI
 
-基于 Vue 3、OpenTUI 和 mpv 构建的终端音乐播放器，支持本地音乐播放、同步歌词显示和歌曲元数据缓存。
+基于 Vue 3、Vue TermUI、OpenTUI 和 mpv 构建的终端音乐播放器。
 
-## 界面预览
+## 界面
 
 ![Music.TUI 播放页](https://imgbed.lldsss.com/file/musictui-1.png)
 
-![Music.TUI 设置页](https://imgbed.lldsss.com/file/musictui-2.png)
 
 ## 快速开始
 
 **运行要求：**
 
 - Node.js >= 26.3.0
-- 已安装 [mpv](https://mpv.io/)，并确保可从终端调用
+- 已安装 [mpv](https://mpv.io/)，并确保可从终端调用，[可参考安装教程](https://blog.lldsss.com/projects/music-tui#install-mpv)
 
 无需安装，直接运行：
 
@@ -31,10 +33,6 @@ npx music.tui "D:\Music"
 npm install -g music.tui
 music-tui
 ```
-
-不传参数时默认扫描当前工作目录；相对路径也以当前工作目录为基准。
-
-支持的音频格式：MP3、FLAC、WAV、M4A、AAC、OGG、OPUS。
 
 ## 功能特性
 
@@ -102,8 +100,9 @@ Music.TUI 会在本地缓存歌曲元数据和歌词，减少重复读取与网�
 
 ## 相关链接
 
+- [npmx](https://npmx.dev/package/music.tui)
 - [npm](https://www.npmjs.com/package/music.tui)
-- [官方网站](https://musictui.lldsss.com)
+
 
 ## License
 
