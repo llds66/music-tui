@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onUnmounted, ref, watch } from 'vue'
-import { banner } from 'ascii.rest/banner'
+import { banner, fonts } from 'ascii.rest/banner'
 import { Box, Text } from 'vue-termui'
 
 const props = defineProps<{
@@ -14,8 +14,13 @@ const emit = defineEmits<{
 
 const title = 'Music.TUI'
 const orange = '#f97316'
+// slim 的三列 M 近似 H；借用同为五行的 block 字形保留斜笔画。
+const logoFont = {
+  ...fonts.slim,
+  glyphs: { ...fonts.slim.glyphs, M: fonts.block.glyphs.M },
+}
 
-// ascii.rest 的网页 fast 对应 1.8，light 对应 ▒。这些都是官方 Banner 的原始字符帧。
+// 保留现有的扫光速度、填充字符和其余 slim 字形。
 const options = {
   pixel: 1,
   shadow: 'none',
@@ -26,9 +31,9 @@ const options = {
 } as const
 
 const variants = [
-  banner(title, { ...options, font: 'slim', gap: 2 }),
-  banner(title, { ...options, font: 'slim', gap: 1 }),
-  banner(title, { ...options, font: 'slim', gap: 0 }),
+  banner(title, { ...options, font: logoFont, gap: 2 }),
+  banner(title, { ...options, font: logoFont, gap: 1 }),
+  banner(title, { ...options, font: logoFont, gap: 0 }),
 ]
 
 // 为播放列表保留标题、分隔线和至少四行歌曲。
