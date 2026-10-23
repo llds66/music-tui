@@ -4,7 +4,9 @@
 
 ## 界面预览
 
-![Music.TUI 播放界面](https://imgbed.lldsss.com/file/1792592890411_Snipaste_1.png)
+![Music.TUI 播放页](https://imgbed.lldsss.com/file/musictui-1.png)
+
+![Music.TUI 设置页](https://imgbed.lldsss.com/file/musictui-2.png)
 
 ## 快速开始
 
@@ -45,15 +47,35 @@ music-tui
 
 ## 快捷键
 
+### 播放页
+
 | 快捷键 | 功能 |
 | --- | --- |
+| `S` | 打开设置页 |
+| `↑` / `↓` | 上一首 / 下一首 |
 | `Space` | 播放 / 暂停 |
 | `←` / `→` | 快退 / 快进 5 秒 |
-| `↑` / `↓` | 上一首 / 下一首；列表获得焦点时移动选择 |
-| `Tab` | 切换播放列表焦点（终端足够宽时） |
-| `Enter` | 播放选中的歌曲 |
 | `M` | 切换播放模式 |
 | `Q` / `Ctrl+C` | 退出 |
+
+### 设置页
+
+| 快捷键 | 功能 |
+| --- | --- |
+| `↑` / `↓` | 选择设置项 |
+| `←` / `→` | 切换当前设置项 |
+| `Q` | 返回播放页 |
+| `Ctrl+C` | 退出 |
+
+## 用户设置
+
+设置页目前提供「显示 Logo」开关，默认开启。设置保存在用户配置目录的 `config.json` 中；首次更改设置后会创建该文件。文件缺失或内容无效时使用默认设置。
+
+| 系统 | 设置文件位置 |
+| --- | --- |
+| Windows | `%APPDATA%\music.tui\config.json` |
+| macOS | `~/Library/Application Support/music.tui/config.json` |
+| Linux | `${XDG_CONFIG_HOME:-~/.config}/music.tui/config.json` |
 
 ## 缓存
 
