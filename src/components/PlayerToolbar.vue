@@ -17,6 +17,7 @@ const hints = computed<Hint[]>(() => [
   { key: 'Space', label: props.isPlaying ? '暂停' : '播放', priority: 4 },
   { key: '←→', label: '跳转', priority: 2 },
   { key: 'M', label: '模式', priority: 1 },
+  { key: 'S', label: '设置', priority: 0 },
   { key: 'Q', label: '退出', priority: 3 },
 ])
 
