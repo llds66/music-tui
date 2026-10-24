@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto'
-import { mkdir, readFile, writeFile } from 'node:fs/promises'
+import { mkdir, readFile, readdir, unlink, writeFile } from 'node:fs/promises'
 import { resolve } from 'node:path'
 import { getCacheDirectory } from './cacheDirectory'
 
@@ -122,6 +122,20 @@ function getCachePath(title: string, artist: string) {
   const hash = createHash('sha256').update(key).digest('hex')
 
   return resolve(CACHE_DIR, `${hash}.json`)
+}
+
+/** 只清理由歌词查询生成的哈希缓存文件，保留同目录的元数据缓存。 */
+export async function clearLyricsCache(): Promise<void> {
+  try {
+    const names = await readdir(CACHE_DIR)
+    await Promise.all(
+      names
+        .filter((name) => /^[a-f\d]{64}\.json$/i.test(name))
+        .map((name) => unlink(resolve(CACHE_DIR, name))),
+    )
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
+  }
 }
 
 function isLyricsContentKind(value: unknown): value is LyricsContentKind {

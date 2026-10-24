@@ -29,7 +29,7 @@ import { theme } from './theme'
 import { stat } from 'node:fs/promises'
 import { BackgroundMetadataReader } from './services/backgroundMetadata'
 import { MetadataCache, type SongMetadata } from './services/metadataCache'
-import { createLyricsRequest } from './services/lyrics'
+import { clearLyricsCache, createLyricsRequest } from './services/lyrics'
 import { copyToClipboard } from './services/clipboard'
 
 const { terminalHeight, terminalWidth } = useTerminalSize()
@@ -77,7 +77,13 @@ const renderer = useRenderer()
 const rendererClosed = (renderer as unknown as { closed: Promise<void> }).closed
 const currentView = ref<'player' | 'settings'>('player')
 const settingsPanel = ref<InstanceType<typeof SettingsPanel> | null>(null)
-const { settings, load: loadUserSettings, toggleShowLogo, flush: flushSettings } = useSettings()
+const {
+  settings,
+  load: loadUserSettings,
+  toggleShowLogo,
+  reset: resetUserSettings,
+  flush: flushSettings,
+} = useSettings()
 const lyricsRequest = computed(() => {
   const title = song.value.title
 
@@ -90,6 +96,7 @@ const lyricsRequest = computed(() => {
 })
 const lyricsRequestCopyStatus = ref<string | null>(null)
 let copyStatusTimer: ReturnType<typeof setTimeout> | null = null
+let dataActionStatusTimer: ReturnType<typeof setTimeout> | null = null
 const metadataByPath = reactive<Record<string, SongMetadata>>({})
 const metadataCache = new MetadataCache()
 const backgroundMetadata = new BackgroundMetadataReader(metadataCache)
@@ -198,6 +205,34 @@ async function copyLyricsRequest(): Promise<void> {
   } catch {
     showCopyStatus('复制失败')
   }
+}
+
+function showDataActionStatus(
+  action: 'clearCache' | 'resetSettings',
+  text: string,
+): void {
+  settingsPanel.value?.showDataActionStatus(action, text)
+  if (dataActionStatusTimer) clearTimeout(dataActionStatusTimer)
+  dataActionStatusTimer = setTimeout(() => {
+    settingsPanel.value?.showDataActionStatus(action, '')
+    dataActionStatusTimer = null
+  }, 2_000)
+}
+
+async function clearCache(): Promise<void> {
+  try {
+    await metadataCache.clear()
+    await clearLyricsCache()
+    for (const path of Object.keys(metadataByPath)) delete metadataByPath[path]
+    showDataActionStatus('clearCache', '已清空')
+  } catch {
+    showDataActionStatus('clearCache', '失败')
+  }
+}
+
+function resetSettings(): void {
+  resetUserSettings()
+  showDataActionStatus('resetSettings', '已恢复')
 }
 
 /**
@@ -372,6 +407,7 @@ onUnmounted(() => {
   void backgroundMetadata.stop()
   metadataCache.stopScheduling()
   if (copyStatusTimer) clearTimeout(copyStatusTimer)
+  if (dataActionStatusTimer) clearTimeout(dataActionStatusTimer)
 })
 
 /**
@@ -401,8 +437,11 @@ const unsubscribeKeyboard = onKeyDown((key) => {
 
       case 'left':
       case 'right':
-      case 'return':
         settingsPanel.value?.toggleSelected()
+        break
+
+      case 'return':
+        settingsPanel.value?.activateSelected()
         break
 
       case 'c':
@@ -507,6 +546,7 @@ onUnmounted(unsubscribeKeyboard)
       :show-logo="settings.showLogo" :available-width="terminalWidth - outerPadding * 2"
       :item-width="listWidth"
       :terminal-height="terminalHeight" :lyrics-request="lyricsRequest"
-      :copy-status="lyricsRequestCopyStatus" @toggle-show-logo="toggleShowLogo" />
+      :copy-status="lyricsRequestCopyStatus" @toggle-show-logo="toggleShowLogo"
+      @clear-cache="clearCache" @reset-settings="resetSettings" />
   </Box>
 </template>

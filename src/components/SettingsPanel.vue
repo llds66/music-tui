@@ -16,17 +16,24 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   (event: 'toggle-show-logo'): void
+  (event: 'clear-cache'): void
+  (event: 'reset-settings'): void
 }>()
 
 const items = [
   { id: 'showLogo', label: '显示 Logo' },
-  { id: 'lyricsDebug', label: '歌词请求 API' },
+  { id: 'clearCache', label: '清空缓存' },
+  { id: 'resetSettings', label: '恢复默认设置' },
 ] as const
+type ItemId = (typeof items)[number]['id']
+type DataActionId = Extract<ItemId, 'clearCache' | 'resetSettings'>
+
 const selectedIndex = ref(0)
+const pendingAction = ref<DataActionId | null>(null)
+const dataActionStatus = ref<{ action: DataActionId; text: string } | null>(null)
 
 const requestParameters = computed(() => props.lyricsRequest?.parameters ?? [])
 // 让设置在常规窗口中有清晰的分组层次，同时避免矮终端裁掉调试信息。
-const titleToItemsGap = computed(() => props.terminalHeight >= 10 ? 1 : 0)
 const settingItemGap = computed(() =>
   props.terminalHeight >= 18 ? 2 : props.terminalHeight >= 11 ? 1 : 0,
 )
@@ -35,22 +42,52 @@ const contentItemGap = computed(() => props.terminalHeight >= 12 ? 1 : 0)
 
 function moveSelection(direction: -1 | 1): void {
   selectedIndex.value = (selectedIndex.value + direction + items.length) % items.length
+  pendingAction.value = null
 }
 
 function toggleSelected(): void {
   if (items[selectedIndex.value]?.id === 'showLogo') emit('toggle-show-logo')
 }
 
+function activateSelected(): void {
+  const id = items[selectedIndex.value]?.id
+  if (id === 'showLogo') {
+    emit('toggle-show-logo')
+    return
+  }
+  if (id !== 'clearCache' && id !== 'resetSettings') return
+
+  if (pendingAction.value !== id) {
+    pendingAction.value = id
+    return
+  }
+
+  pendingAction.value = null
+  if (id === 'clearCache') emit('clear-cache')
+  else emit('reset-settings')
+}
+
+function dataActionLabel(id: DataActionId): string {
+  const status = dataActionStatus.value
+  if (status?.action === id && status.text) return `[${status.text}]`
+  if (pendingAction.value === id) return '[再次 Enter 确认]'
+  return '[Enter]'
+}
+
 defineExpose({
   moveSelection,
   toggleSelected,
+  activateSelected,
+  showDataActionStatus: (action: DataActionId, text: string) => {
+    dataActionStatus.value = { action, text }
+  },
 })
 
 type Hint = { key: string; label: string; priority: number }
 const hints: Hint[] = [
   { key: '↑↓', label: '选择', priority: 1 },
   { key: 'C', label: '复制 URL', priority: 2 },
-  { key: 'Enter', label: '切换', priority: 3 },
+  { key: 'Enter', label: '执行', priority: 3 },
   { key: '←→', label: '切换', priority: 4 },
   { key: 'Q', label: '返回', priority: 5 },
 ]
@@ -90,23 +127,35 @@ const hintsContent = computed(() => {
 
 <template>
   <Box width="100%" height="100%" flexDirection="column"
-    :gap="titleToItemsGap" overflow="hidden">
-    <Box width="100%" :height="1" justifyContent="center" :flexShrink="0" overflow="hidden">
-      <Text :fg="theme.primary" bold wrapMode="none" :truncate="true">MUSIC.TUI 设置</Text>
-    </Box>
-
+    overflow="hidden">
     <Box width="100%" flexDirection="column" :flexGrow="1" overflow="hidden">
-      <Box v-for="(item, index) in items" :key="item.id"
-        :width="Math.min(itemWidth, availableWidth)" :height="1"
-        flexDirection="row" :gap="1" :marginTop="item.id === 'lyricsDebug' ? settingItemGap : 0"
-        :flexShrink="0" overflow="hidden">
-        <Text :fg="index === selectedIndex ? theme.accentSoft : theme.muted" :width="1" wrapMode="none">›</Text>
-        <Text :fg="index === selectedIndex ? theme.primary : theme.secondary"
-          :flexGrow="1" :minWidth="1" wrapMode="none" :truncate="true">{{ item.label }}</Text>
-        <Text v-if="item.id === 'showLogo'" :fg="showLogo ? theme.accentSoft : theme.secondary" :flexShrink="0"
-          wrapMode="none">{{ showLogo ? '[开启]' : '[关闭]' }}</Text>
+      <Box width="100%" :height="1" :flexShrink="0" overflow="hidden">
+        <Text :fg="theme.primary" bold wrapMode="none">基本设置</Text>
       </Box>
+      <template v-for="(item, index) in items" :key="item.id">
+        <Box v-if="item.id === 'clearCache'" width="100%" :height="1"
+          :marginTop="settingItemGap" :flexShrink="0" overflow="hidden">
+          <Text :fg="theme.primary" bold wrapMode="none">数据管理</Text>
+        </Box>
 
+        <Box :width="Math.min(itemWidth, availableWidth)" :height="1"
+          flexDirection="row" :gap="1"
+          :marginTop="item.id === 'showLogo' || item.id === 'clearCache' ? groupContentGap : item.id === 'resetSettings' ? contentItemGap : 0"
+          :flexShrink="0" overflow="hidden">
+          <Text :fg="index === selectedIndex ? theme.accentSoft : theme.muted" :width="1" wrapMode="none">›</Text>
+          <Text :fg="index === selectedIndex ? theme.primary : theme.secondary"
+            :flexGrow="1" :minWidth="1" wrapMode="none" :truncate="true">{{ item.label }}</Text>
+          <Text v-if="item.id === 'showLogo'" :fg="showLogo ? theme.accentSoft : theme.secondary" :flexShrink="0"
+            wrapMode="none">{{ showLogo ? '[开启]' : '[关闭]' }}</Text>
+          <Text v-else-if="item.id === 'clearCache' || item.id === 'resetSettings'" :fg="theme.accentSoft"
+            :flexShrink="0" wrapMode="none">{{ dataActionLabel(item.id) }}</Text>
+        </Box>
+
+      </template>
+
+      <Box width="100%" :height="1" :marginTop="settingItemGap" :flexShrink="0" overflow="hidden">
+        <Text :fg="theme.primary" bold wrapMode="none">歌词请求 API</Text>
+      </Box>
       <Box width="100%" flexDirection="column" :marginTop="groupContentGap" :gap="contentItemGap"
         :flexShrink="0" overflow="hidden">
         <Text v-if="!lyricsRequest" :fg="theme.muted" wrapMode="none">  请求参数：等待当前歌曲元数据</Text>

@@ -16,16 +16,25 @@ export function useSettings() {
     if (!changed) Object.assign(settings, saved)
   }
 
-  function toggleShowLogo(): void {
-    settings.showLogo = !settings.showLogo
+  function persist(): void {
     changed = true
     const snapshot = { ...settings }
     pendingSave = pendingSave.then(() => saveSettings(snapshot)).catch(() => {})
+  }
+
+  function toggleShowLogo(): void {
+    settings.showLogo = !settings.showLogo
+    persist()
+  }
+
+  function reset(): void {
+    Object.assign(settings, defaultSettings)
+    persist()
   }
 
   function flush(): Promise<void> {
     return pendingSave
   }
 
-  return { settings, load, toggleShowLogo, flush }
+  return { settings, load, toggleShowLogo, reset, flush }
 }

@@ -159,6 +159,19 @@ export class MetadataCache {
     }
   }
 
+  /** 清除内存与磁盘中的歌曲元数据缓存。 */
+  async clear(): Promise<void> {
+    if (this.timer) {
+      clearTimeout(this.timer)
+      this.timer = null
+    }
+    if (this.writing) await this.writing
+
+    this.entries = Object.create(null)
+    this.dirty = false
+    await rm(this.filePath, { force: true })
+  }
+
   /** 停止接收新条目，并取消尚未开始的延迟写入。 */
   stopScheduling(): void {
     this.acceptsWrites = false
