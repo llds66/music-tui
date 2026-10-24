@@ -5,6 +5,7 @@ import {
   saveSettings,
   type UserSettings,
 } from '../services/userSettings'
+import { LYRICS_PROVIDERS } from '../services/lyricsProvider'
 
 export function useSettings() {
   const settings = reactive<UserSettings>({ ...defaultSettings })
@@ -27,6 +28,14 @@ export function useSettings() {
     persist()
   }
 
+  function cycleLyricsProvider(direction: -1 | 1): void {
+    const index = LYRICS_PROVIDERS.indexOf(settings.lyricsProvider)
+    settings.lyricsProvider = LYRICS_PROVIDERS[
+      (index + direction + LYRICS_PROVIDERS.length) % LYRICS_PROVIDERS.length
+    ]!
+    persist()
+  }
+
   function reset(): void {
     Object.assign(settings, defaultSettings)
     persist()
@@ -36,5 +45,5 @@ export function useSettings() {
     return pendingSave
   }
 
-  return { settings, load, toggleShowLogo, reset, flush }
+  return { settings, load, toggleShowLogo, cycleLyricsProvider, reset, flush }
 }

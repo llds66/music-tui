@@ -53,15 +53,6 @@ const {
 } = usePlayer()
 
 const {
-  lyrics,
-  contentKind: lyricsContentKind,
-  isLoading: lyricsLoading,
-  error: lyricsError,
-  activeIndex,
-  activeWordIndex,
-} = useLyrics(song, currentTime)
-
-const {
   songs,
   playMode,
   loadDirectory,
@@ -81,9 +72,20 @@ const {
   settings,
   load: loadUserSettings,
   toggleShowLogo,
+  cycleLyricsProvider,
   reset: resetUserSettings,
   flush: flushSettings,
 } = useSettings()
+const {
+  lyrics,
+  plainLyrics,
+  contentKind: lyricsContentKind,
+  requestStatus: lyricsRequestStatus,
+  isLoading: lyricsLoading,
+  error: lyricsError,
+  activeIndex,
+  activeWordIndex,
+} = useLyrics(song, currentTime, computed(() => settings.lyricsProvider))
 const lyricsRequest = computed(() => {
   const title = song.value.title
 
@@ -92,6 +94,7 @@ const lyricsRequest = computed(() => {
   return createLyricsRequest(
     title,
     song.value.artist === '未知歌手' ? '' : song.value.artist,
+    settings.lyricsProvider,
   )
 })
 const lyricsRequestCopyStatus = ref<string | null>(null)
@@ -233,6 +236,10 @@ async function clearCache(): Promise<void> {
 function resetSettings(): void {
   resetUserSettings()
   showDataActionStatus('resetSettings', '已恢复')
+}
+
+function changeLyricsProvider(direction: -1 | 1): void {
+  cycleLyricsProvider(direction)
 }
 
 /**
@@ -436,8 +443,11 @@ const unsubscribeKeyboard = onKeyDown((key) => {
         break
 
       case 'left':
+        settingsPanel.value?.toggleSelected(-1)
+        break
+
       case 'right':
-        settingsPanel.value?.toggleSelected()
+        settingsPanel.value?.toggleSelected(1)
         break
 
       case 'return':
@@ -529,7 +539,7 @@ onUnmounted(unsubscribeKeyboard)
         <PlaybackTime v-if="!showMusicList && contentHeight >= 5" :current-time="currentTime"
           :duration="duration" :width="terminalWidth - outerPadding * 2" />
         <LyricsPanel :lyrics="lyrics" :active-index="activeIndex" :active-word-index="activeWordIndex"
-          :content-kind="lyricsContentKind" :is-loading="lyricsLoading" :error="lyricsError" :song="song"
+          :plain-lyrics="plainLyrics" :content-kind="lyricsContentKind" :is-loading="lyricsLoading" :error="lyricsError" :song="song"
           :available-height="contentHeight - (!showMusicList && contentHeight >= 5 ? 1 : 0)" />
       </Box>
     </Box>
@@ -546,7 +556,9 @@ onUnmounted(unsubscribeKeyboard)
       :show-logo="settings.showLogo" :available-width="terminalWidth - outerPadding * 2"
       :item-width="listWidth"
       :terminal-height="terminalHeight" :lyrics-request="lyricsRequest"
-      :copy-status="lyricsRequestCopyStatus" @toggle-show-logo="toggleShowLogo"
+      :lyrics-provider="settings.lyricsProvider" :lyrics-request-status="lyricsRequestStatus"
+      :copy-status="lyricsRequestCopyStatus"
+      @toggle-show-logo="toggleShowLogo" @cycle-lyrics-provider="changeLyricsProvider"
       @clear-cache="clearCache" @reset-settings="resetSettings" />
   </Box>
 </template>

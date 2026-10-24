@@ -2,13 +2,16 @@ import { randomUUID } from 'node:crypto'
 import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
+import { isLyricsProvider, type LyricsProvider } from './lyricsProvider'
 
 export type UserSettings = {
   showLogo: boolean
+  lyricsProvider: LyricsProvider
 }
 
 export const defaultSettings: Readonly<UserSettings> = {
   showLogo: true,
+  lyricsProvider: 'auto',
 }
 
 export function getConfigDirectory(): string {
@@ -34,7 +37,13 @@ export async function loadSettings(directory = getConfigDirectory()): Promise<Us
     }
 
     const showLogo = (parsed as Record<string, unknown>).showLogo
-    return { showLogo: typeof showLogo === 'boolean' ? showLogo : defaultSettings.showLogo }
+    const lyricsProvider = (parsed as Record<string, unknown>).lyricsProvider
+    return {
+      showLogo: typeof showLogo === 'boolean' ? showLogo : defaultSettings.showLogo,
+      lyricsProvider: isLyricsProvider(lyricsProvider)
+        ? lyricsProvider
+        : defaultSettings.lyricsProvider,
+    }
   } catch {
     return { ...defaultSettings }
   }

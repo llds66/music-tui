@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto'
 import { mkdir, readFile, readdir, unlink, writeFile } from 'node:fs/promises'
 import { resolve } from 'node:path'
 import { getCacheDirectory } from './cacheDirectory'
+import type { LyricsProvider } from './lyricsProvider'
 
 /**
  * 歌词
@@ -10,21 +11,40 @@ import { getCacheDirectory } from './cacheDirectory'
 export interface LyricWord {
   text: string
   startMs: number
-  durationMs: number
+  durationMs?: number
 }
 
 export interface LyricLine {
   text: string
-  startMs: number
-  durationMs: number
+  startMs?: number
+  durationMs?: number
   words: LyricWord[]
 }
 
-export type LyricsContentKind = 'lyrics' | 'credits' | 'instrumental' | 'none'
+export type LyricsContentKind = 'lyrics' | 'credits' | 'instrumental' | 'plain' | 'none'
 
 export type LyricsResult = {
   lines: LyricLine[]
+  plainLyrics: string
   contentKind: LyricsContentKind
+}
+
+export type LyricsFetchResult = LyricsResult & {
+  requestStatus: string
+}
+
+export class LyricsRequestError extends Error {
+  readonly status: number
+  readonly code?: string
+  readonly retryAfterSeconds?: number
+
+  constructor(status: number, code?: string, message?: string, retryAfterSeconds?: number) {
+    super(message ?? code ?? `HTTP ${status}`)
+    this.name = 'LyricsRequestError'
+    this.status = status
+    this.code = code
+    this.retryAfterSeconds = retryAfterSeconds
+  }
 }
 
 interface LyricsApiLine {
@@ -49,12 +69,13 @@ interface LyricsApiResponse {
   error?: {
     code?: string
     message?: string
+    retryAfterSeconds?: number
   }
 }
 
 const CACHE_DIR = getCacheDirectory()
 const LYRICS_API_URL = 'https://api.lyriva.xyz/lyriva/lyrics'
-const CACHE_VERSION = 2
+const CACHE_VERSION = 3
 
 type CachedLyrics = LyricsResult & { version: typeof CACHE_VERSION }
 
@@ -77,6 +98,7 @@ function decodeSearchText(value: string): string {
 
 export type LyricsRequestDetails = {
   url: string
+  provider: LyricsProvider
   method: 'GET'
   headers: {
     Accept: 'application/json'
@@ -93,6 +115,7 @@ export type LyricsRequestDetails = {
 export function createLyricsRequest(
   title: string,
   artist: string,
+  provider: LyricsProvider = 'auto',
 ): LyricsRequestDetails {
   const normalizedTitle = decodeSearchText(title)
   const normalizedArtist = decodeSearchText(artist)
@@ -106,19 +129,22 @@ export function createLyricsRequest(
     parameters.push({ name: 'artist', value: normalizedArtist })
   }
 
-  query.set('provider', 'qq')
-  parameters.push({ name: 'provider', value: 'qq' })
+  if (provider !== 'auto') {
+    query.set('provider', provider)
+    parameters.push({ name: 'provider', value: provider })
+  }
 
   return {
     url: `${LYRICS_API_URL}?${query}`,
+    provider,
     method: 'GET',
     headers: { Accept: 'application/json' },
     parameters,
   }
 }
 
-function getCachePath(title: string, artist: string) {
-  const key = `${title.trim().toLowerCase()}\0${artist.trim().toLowerCase()}`
+function getCachePath(title: string, artist: string, provider: LyricsProvider) {
+  const key = `${title.trim().toLowerCase()}\0${artist.trim().toLowerCase()}\0${provider}`
   const hash = createHash('sha256').update(key).digest('hex')
 
   return resolve(CACHE_DIR, `${hash}.json`)
@@ -142,6 +168,7 @@ function isLyricsContentKind(value: unknown): value is LyricsContentKind {
   return value === 'lyrics' ||
     value === 'credits' ||
     value === 'instrumental' ||
+    value === 'plain' ||
     value === 'none'
 }
 
@@ -161,50 +188,50 @@ function normalizeWords(words: unknown): LyricWord[] {
     Boolean(word) &&
     typeof word === 'object' &&
     typeof (word as LyricWord).text === 'string' &&
-    Number.isFinite((word as LyricWord).startMs) &&
-    Number.isFinite((word as LyricWord).durationMs),
+    Number.isFinite((word as LyricWord).startMs),
   )
 }
 
 function normalizeLines(
   rawLines: LyricsApiLine[] | null | undefined,
-  trackDurationSeconds: number | undefined,
 ): LyricLine[] {
   if (!Array.isArray(rawLines)) return []
 
-  const timedLines = rawLines
-    .filter((line): line is LyricsApiLine & { text: string; startMs: number } =>
-      typeof line.text === 'string' && Number.isFinite(line.startMs),
-    )
-    .sort((a, b) => a.startMs - b.startMs)
-  const trackDurationMs = Number.isFinite(trackDurationSeconds)
-    ? trackDurationSeconds! * 1000
-    : undefined
-
-  return timedLines.map((line, index) => {
-    const nextStartMs = timedLines[index + 1]?.startMs
-    const inferredDuration = nextStartMs !== undefined
-      ? nextStartMs - line.startMs
-      : trackDurationMs === undefined ? 0 : trackDurationMs - line.startMs
-
-    return {
-      text: line.text,
-      startMs: line.startMs,
-      durationMs: Number.isFinite(line.durationMs)
-        ? Math.max(0, line.durationMs as number)
-        : Math.max(0, inferredDuration),
-      words: normalizeWords(line.words),
-    }
+  const normalized: Array<LyricsApiLine & { text: string; index: number }> = []
+  rawLines.forEach((line, index) => {
+    if (typeof line.text === 'string') normalized.push({ ...line, text: line.text, index })
   })
+
+  return normalized
+    .sort((a, b) => {
+      const aIndex = a.index
+      const bIndex = b.index
+      const aTimed = Number.isFinite(a.startMs)
+      const bTimed = Number.isFinite(b.startMs)
+      if (aTimed && bTimed) return (a.startMs as number) - (b.startMs as number)
+      if (aTimed) return -1
+      if (bTimed) return 1
+      return aIndex - bIndex
+    })
+    .map((line) => ({
+      text: line.text,
+      ...(Number.isFinite(line.startMs) ? { startMs: line.startMs as number } : {}),
+      ...(Number.isFinite(line.durationMs) ? { durationMs: line.durationMs as number } : {}),
+      words: normalizeWords(line.words),
+    }))
 }
 
 function classifyLyrics(
   lines: LyricLine[],
+  plainLyrics: string,
   instrumental: boolean,
 ): LyricsContentKind {
   if (instrumental) return 'instrumental'
-  if (lines.length === 0) return 'none'
-  if (lines.every((line) => CREDIT_PREFIX.test(line.text.trim()))) return 'credits'
+  const timedLines = lines.filter((line) => Number.isFinite(line.startMs))
+  if (timedLines.length === 0) {
+    return plainLyrics.trim() || lines.length > 0 ? 'plain' : 'none'
+  }
+  if (timedLines.every((line) => CREDIT_PREFIX.test(line.text.trim()))) return 'credits'
 
   return 'lyrics'
 }
@@ -212,12 +239,14 @@ function classifyLyrics(
 export async function fetchLyrics(
   title: string,
   artist: string,
+  provider: LyricsProvider,
   signal?: AbortSignal,
-): Promise<LyricsResult> {
-  const request = createLyricsRequest(title, artist)
+): Promise<LyricsFetchResult> {
+  const request = createLyricsRequest(title, artist, provider)
   const cachePath = getCachePath(
     request.parameters.find(({ name }) => name === 'title')!.value,
     request.parameters.find(({ name }) => name === 'artist')?.value ?? '',
+    provider,
   )
 
   // 优先读取本地缓存
@@ -226,7 +255,7 @@ export async function fetchLyrics(
     const cached: unknown = JSON.parse(content)
 
     if (isCachedLyrics(cached)) {
-      return cached
+      return { ...cached, requestStatus: '本地缓存' }
     }
   } catch {
     // 缓存不存在或损坏，继续请求 API
@@ -244,21 +273,31 @@ export async function fetchLyrics(
   const body = (await response.json()) as LyricsApiResponse
 
   if (!response.ok) {
-    throw new Error(
-      body.error?.message ??
-      body.error?.code ??
-      `HTTP ${response.status}`,
+    const retryAfterValue = response.headers.get('Retry-After')
+    const retryAfterHeader = retryAfterValue === null ? Number.NaN : Number(retryAfterValue)
+    throw new LyricsRequestError(
+      response.status,
+      body.error?.code,
+      body.error?.message,
+      Number.isFinite(retryAfterHeader)
+        ? retryAfterHeader
+        : body.error?.retryAfterSeconds,
     )
   }
 
-  const lines = normalizeLines(
-    body.data?.syncedLyrics,
-    body.data?.track.duration,
-  )
+  const lines = normalizeLines(body.data?.syncedLyrics)
+  const suppliedPlainLyrics = typeof body.data?.plainLyrics === 'string'
+    ? body.data.plainLyrics
+    : ''
+  const plainLyrics = suppliedPlainLyrics || lines
+    .filter((line) => !Number.isFinite(line.startMs))
+    .map((line) => line.text)
+    .join('\n')
   const result: CachedLyrics = {
     version: CACHE_VERSION,
     lines,
-    contentKind: classifyLyrics(lines, body.data?.instrumental === true),
+    plainLyrics,
+    contentKind: classifyLyrics(lines, plainLyrics, body.data?.instrumental === true),
   }
 
   // 缓存失败不应影响歌词显示
@@ -273,5 +312,5 @@ export async function fetchLyrics(
     // 忽略缓存写入错误
   }
 
-  return result
+  return { ...result, requestStatus: 'HTTP 200' }
 }

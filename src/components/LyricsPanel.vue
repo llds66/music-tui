@@ -7,6 +7,7 @@ import { theme } from '../theme'
 
 const props = defineProps<{
   lyrics: LyricLine[]
+  plainLyrics: string
   contentKind: LyricsContentKind
   activeIndex: number
   activeWordIndex: number
@@ -51,10 +52,18 @@ const visibleLyrics = computed(() => {
   })
 })
 
+const visiblePlainLyrics = computed(() =>
+  props.plainLyrics
+    .split(/\r?\n/)
+    .filter((line) => line.trim())
+    .slice(0, visibleLineCount.value),
+)
+
 const statusText = computed(() => {
   if (props.isLoading) return '正在获取歌词...'
-  if (props.error) return '歌词获取失败'
+  if (props.error) return props.error
   if (props.contentKind === 'instrumental') return '纯音乐 · 无歌词'
+  if (props.contentKind === 'plain') return ''
   if (props.lyrics.length === 0) return '暂无同步歌词'
 
   return ''
@@ -125,10 +134,16 @@ const activeLineContent = computed(() => {
       </Text>
 
       <template v-else>
+        <template v-if="contentKind === 'plain'">
+          <Text :fg="theme.muted">静态歌词（无时间轴）</Text>
+          <Text v-for="(line, index) in visiblePlainLyrics" :key="index" width="100%"
+            textAlign="center" wrapMode="none" :truncate="true" :fg="theme.secondary">{{ line }}</Text>
+        </template>
+
         <Text v-if="contentKind === 'credits'" :fg="theme.muted">
           制作信息（无演唱歌词）
         </Text>
-        <template v-for="line in visibleLyrics" :key="line.index">
+        <template v-if="contentKind !== 'plain'" v-for="line in visibleLyrics" :key="line.index">
           <!-- 当前行：单个 Text 显示逐字富文本，由外层 Box 保持居中 -->
           <Text v-if="line.active && line.words.length > 0" :content="activeLineContent" :width="activeLineText.width"
             wrapMode="none" />

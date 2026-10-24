@@ -1,28 +1,74 @@
 import { computed, onUnmounted, ref, watch, type Ref } from 'vue'
 import {
   fetchLyrics,
+  LyricsRequestError,
   type LyricsContentKind,
   type LyricLine,
 } from '../services/lyrics'
+import type { LyricsProvider } from '../services/lyricsProvider'
 import type { SongInfo } from './usePlayer'
 
 export function useLyrics(
   song: Ref<SongInfo>,
   currentTime: Ref<number>,
+  provider: Ref<LyricsProvider>,
 ) {
   const lyrics = ref<LyricLine[]>([])
+  const plainLyrics = ref('')
   const contentKind = ref<LyricsContentKind>('none')
+  const requestStatus = ref<string | null>(null)
   const isLoading = ref(false)
   const error = ref<string | null>(null)
 
   let controller: AbortController | null = null
   let requestVersion = 0
 
+  function describeRequestError(error: unknown): { message: string; status: string } {
+    if (error instanceof LyricsRequestError) {
+      const status = `HTTP ${error.status}${error.code ? ` · ${error.code}` : ''}`
+      const retry = error.retryAfterSeconds === undefined
+        ? ''
+        : `，${error.retryAfterSeconds} 秒后重试`
+
+      switch (error.status) {
+        case 400:
+          return { message: '歌曲信息无效，无法查询歌词', status }
+        case 404:
+          return { message: '未找到歌词', status }
+        case 409:
+          if (error.code === 'PROVIDER_DISABLED') {
+            return { message: '该歌词来源当前不可用，请切换来源', status }
+          }
+          if (error.code === 'RECORDING_CONFLICT') {
+            return { message: '歌曲录音版本信息冲突', status }
+          }
+          return { message: '歌词匹配不明确，请切换来源', status }
+        case 429:
+          return { message: `请求过于频繁${retry || '，请稍后重试'}`, status }
+        case 502:
+          return { message: '歌词来源查询失败，请切换来源重试', status }
+        case 503:
+          return { message: `歌词服务暂不可用${retry || '，请稍后重试'}`, status }
+        case 504:
+          return { message: '歌词查询超时，请稍后重试', status }
+        default:
+          return { message: '歌词获取失败', status }
+      }
+    }
+
+    if (error instanceof Error && error.name === 'TimeoutError') {
+      return { message: '歌词查询超时，请稍后重试', status: '本地超时（125 秒）' }
+    }
+
+    return { message: '网络连接异常，歌词获取失败', status: '网络错误' }
+  }
+
   const activeIndex = computed(() => {
     const currentMs = currentTime.value * 1000
 
     for (let i = lyrics.value.length - 1; i >= 0; i--) {
-      if (currentMs >= lyrics.value[i]!.startMs) {
+      const startMs = lyrics.value[i]!.startMs
+      if (typeof startMs === 'number' && currentMs >= startMs) {
         return i
       }
     }
@@ -46,14 +92,16 @@ export function useLyrics(
     return -1
   })
 
-  async function loadLyrics(title: string, artist: string) {
+  async function loadLyrics(title: string, artist: string, selectedProvider: LyricsProvider) {
     controller?.abort()
 
     const version = ++requestVersion
     controller = new AbortController()
 
     lyrics.value = []
+    plainLyrics.value = ''
     contentKind.value = 'none'
+    requestStatus.value = '请求中...'
     error.value = null
     isLoading.value = true
 
@@ -61,6 +109,7 @@ export function useLyrics(
       const result = await fetchLyrics(
         title,
         artist,
+        selectedProvider,
         AbortSignal.any([
           controller.signal,
           AbortSignal.timeout(125000),
@@ -70,7 +119,9 @@ export function useLyrics(
       if (version !== requestVersion) return
 
       lyrics.value = result.lines
+      plainLyrics.value = result.plainLyrics
       contentKind.value = result.contentKind
+      requestStatus.value = result.requestStatus
     } catch (err) {
       if (version !== requestVersion) return
 
@@ -78,8 +129,9 @@ export function useLyrics(
         return
       }
 
-      error.value =
-        err instanceof Error ? err.message : String(err)
+      const details = describeRequestError(err)
+      error.value = details.message
+      requestStatus.value = details.status
     } finally {
       if (version === requestVersion) {
         isLoading.value = false
@@ -88,8 +140,8 @@ export function useLyrics(
   }
 
   watch(
-    () => [song.value.title, song.value.artist] as const,
-    ([title, artist]) => {
+    () => [song.value.title, song.value.artist, provider.value] as const,
+    ([title, artist, selectedProvider]) => {
       // 等待 mpv 完成 metadata 读取
       if (
         !title ||
@@ -99,7 +151,9 @@ export function useLyrics(
         controller?.abort()
         ++requestVersion
         lyrics.value = []
+        plainLyrics.value = ''
         contentKind.value = 'none'
+        requestStatus.value = null
         error.value = null
         isLoading.value = false
         return
@@ -108,6 +162,7 @@ export function useLyrics(
       void loadLyrics(
         title,
         artist === '未知歌手' ? '' : artist,
+        selectedProvider,
       )
     },
     { immediate: true },
@@ -120,7 +175,9 @@ export function useLyrics(
 
   return {
     lyrics,
+    plainLyrics,
     contentKind,
+    requestStatus,
     isLoading,
     error,
     activeIndex,
