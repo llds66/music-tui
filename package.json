@@ -1,6 +1,6 @@
 {
   "name": "music.tui",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "description": "在终端中播放本地音乐并显示同步歌词的 TUI 播放器",
   "type": "module",
   "bin": {
