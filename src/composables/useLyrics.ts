@@ -1,6 +1,7 @@
 import { computed, onUnmounted, ref, watch, type Ref } from 'vue'
 import {
   fetchLyrics,
+  type LyricsContentKind,
   type LyricLine,
 } from '../services/lyrics'
 import type { SongInfo } from './usePlayer'
@@ -10,6 +11,7 @@ export function useLyrics(
   currentTime: Ref<number>,
 ) {
   const lyrics = ref<LyricLine[]>([])
+  const contentKind = ref<LyricsContentKind>('none')
   const isLoading = ref(false)
   const error = ref<string | null>(null)
 
@@ -51,6 +53,7 @@ export function useLyrics(
     controller = new AbortController()
 
     lyrics.value = []
+    contentKind.value = 'none'
     error.value = null
     isLoading.value = true
 
@@ -66,7 +69,8 @@ export function useLyrics(
 
       if (version !== requestVersion) return
 
-      lyrics.value = result
+      lyrics.value = result.lines
+      contentKind.value = result.contentKind
     } catch (err) {
       if (version !== requestVersion) return
 
@@ -95,6 +99,7 @@ export function useLyrics(
         controller?.abort()
         ++requestVersion
         lyrics.value = []
+        contentKind.value = 'none'
         error.value = null
         isLoading.value = false
         return
@@ -115,6 +120,7 @@ export function useLyrics(
 
   return {
     lyrics,
+    contentKind,
     isLoading,
     error,
     activeIndex,

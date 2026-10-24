@@ -29,6 +29,8 @@ import { theme } from './theme'
 import { stat } from 'node:fs/promises'
 import { BackgroundMetadataReader } from './services/backgroundMetadata'
 import { MetadataCache, type SongMetadata } from './services/metadataCache'
+import { createLyricsRequest } from './services/lyrics'
+import { copyToClipboard } from './services/clipboard'
 
 const { terminalHeight, terminalWidth } = useTerminalSize()
 const props = defineProps<{ musicDirectory: string }>()
@@ -52,6 +54,7 @@ const {
 
 const {
   lyrics,
+  contentKind: lyricsContentKind,
   isLoading: lyricsLoading,
   error: lyricsError,
   activeIndex,
@@ -75,6 +78,18 @@ const rendererClosed = (renderer as unknown as { closed: Promise<void> }).closed
 const currentView = ref<'player' | 'settings'>('player')
 const settingsPanel = ref<InstanceType<typeof SettingsPanel> | null>(null)
 const { settings, load: loadUserSettings, toggleShowLogo, flush: flushSettings } = useSettings()
+const lyricsRequest = computed(() => {
+  const title = song.value.title
+
+  if (!title || title === '正在加载...' || title === '未知歌曲') return null
+
+  return createLyricsRequest(
+    title,
+    song.value.artist === '未知歌手' ? '' : song.value.artist,
+  )
+})
+const lyricsRequestCopyStatus = ref<string | null>(null)
+let copyStatusTimer: ReturnType<typeof setTimeout> | null = null
 const metadataByPath = reactive<Record<string, SongMetadata>>({})
 const metadataCache = new MetadataCache()
 const backgroundMetadata = new BackgroundMetadataReader(metadataCache)
@@ -159,6 +174,30 @@ function describeShutdownTimings(timings: ShutdownTimings): string {
     `关闭 TUI ${elapsed(timings.tuiDestroyedAt)}`,
     `保存设置和缓存 ${elapsed(timings.persistenceFinishedAt)}`,
   ].join('；')
+}
+
+function showCopyStatus(status: string): void {
+  lyricsRequestCopyStatus.value = status
+  if (copyStatusTimer) clearTimeout(copyStatusTimer)
+  copyStatusTimer = setTimeout(() => {
+    lyricsRequestCopyStatus.value = null
+    copyStatusTimer = null
+  }, 2_000)
+}
+
+async function copyLyricsRequest(): Promise<void> {
+  const request = lyricsRequest.value
+  if (!request) {
+    showCopyStatus('无请求')
+    return
+  }
+
+  try {
+    await copyToClipboard(request.url)
+    showCopyStatus('已复制')
+  } catch {
+    showCopyStatus('复制失败')
+  }
 }
 
 /**
@@ -332,6 +371,7 @@ onUnmounted(unsubscribeEnded)
 onUnmounted(() => {
   void backgroundMetadata.stop()
   metadataCache.stopScheduling()
+  if (copyStatusTimer) clearTimeout(copyStatusTimer)
 })
 
 /**
@@ -361,7 +401,12 @@ const unsubscribeKeyboard = onKeyDown((key) => {
 
       case 'left':
       case 'right':
+      case 'return':
         settingsPanel.value?.toggleSelected()
+        break
+
+      case 'c':
+        void copyLyricsRequest()
         break
 
       default:
@@ -445,7 +490,7 @@ onUnmounted(unsubscribeKeyboard)
         <PlaybackTime v-if="!showMusicList && contentHeight >= 5" :current-time="currentTime"
           :duration="duration" :width="terminalWidth - outerPadding * 2" />
         <LyricsPanel :lyrics="lyrics" :active-index="activeIndex" :active-word-index="activeWordIndex"
-          :is-loading="lyricsLoading" :error="lyricsError" :song="song"
+          :content-kind="lyricsContentKind" :is-loading="lyricsLoading" :error="lyricsError" :song="song"
           :available-height="contentHeight - (!showMusicList && contentHeight >= 5 ? 1 : 0)" />
       </Box>
     </Box>
@@ -461,6 +506,7 @@ onUnmounted(unsubscribeKeyboard)
     <SettingsPanel ref="settingsPanel" :visible="currentView === 'settings'"
       :show-logo="settings.showLogo" :available-width="terminalWidth - outerPadding * 2"
       :item-width="listWidth"
-      :terminal-height="terminalHeight" @toggle-show-logo="toggleShowLogo" />
+      :terminal-height="terminalHeight" :lyrics-request="lyricsRequest"
+      :copy-status="lyricsRequestCopyStatus" @toggle-show-logo="toggleShowLogo" />
   </Box>
 </template>

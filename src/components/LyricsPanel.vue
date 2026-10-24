@@ -2,11 +2,12 @@
 import { computed } from 'vue'
 import { Box, Text, StyledText, bold, fg, type TextChunk } from 'vue-termui'
 import stringWidth from 'string-width'
-import type { LyricLine } from '../services/lyrics'
+import type { LyricLine, LyricsContentKind } from '../services/lyrics'
 import { theme } from '../theme'
 
 const props = defineProps<{
   lyrics: LyricLine[]
+  contentKind: LyricsContentKind
   activeIndex: number
   activeWordIndex: number
   isLoading: boolean
@@ -53,6 +54,7 @@ const visibleLyrics = computed(() => {
 const statusText = computed(() => {
   if (props.isLoading) return '正在获取歌词...'
   if (props.error) return '歌词获取失败'
+  if (props.contentKind === 'instrumental') return '纯音乐 · 无歌词'
   if (props.lyrics.length === 0) return '暂无同步歌词'
 
   return ''
@@ -123,6 +125,9 @@ const activeLineContent = computed(() => {
       </Text>
 
       <template v-else>
+        <Text v-if="contentKind === 'credits'" :fg="theme.muted">
+          制作信息（无演唱歌词）
+        </Text>
         <template v-for="line in visibleLyrics" :key="line.index">
           <!-- 当前行：单个 Text 显示逐字富文本，由外层 Box 保持居中 -->
           <Text v-if="line.active && line.words.length > 0" :content="activeLineContent" :width="activeLineText.width"
